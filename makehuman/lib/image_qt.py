@@ -61,7 +61,7 @@ def load(path):
 
     pixels = im.bits().asstring(h * w * 4)
 
-    pixels = np.fromstring(pixels, dtype=np.uint32).reshape((h, w))
+    pixels = np.frombuffer(pixels, dtype=np.uint32).reshape((h, w))
     del im
 
     a = (pixels >> 24).astype(np.uint8)
@@ -102,7 +102,7 @@ def toQImage(data):
         fmt = QtGui.QImage.Format_ARGB32
         pixels = data[...,3] * 0x1000000 + data[...,0] * 0x10000 + data[...,1] * 0x100 + data[...,2]
 
-    return QtGui.QImage(pixels.tostring(), w, h, w * 4, fmt)
+    return QtGui.QImage(pixels.tobytes(), w, h, w * 4, fmt)
 
 def save(path, data):
     """

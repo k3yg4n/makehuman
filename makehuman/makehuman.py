@@ -401,7 +401,7 @@ Homepage: %s""" % (self.author, self.license, self.copyright, self.homepage)
                 index.append(len(key))
                 index.append(len(value))
                 text += key + value
-            text = np.fromstring(text, dtype='S1')
+            text = np.frombuffer(text.encode('utf-8'), dtype='S1')
             index = np.array(index, dtype=np.uint32)
             return np.array([text, index], dtype=object)
 
@@ -415,8 +415,8 @@ Homepage: %s""" % (self.author, self.license, self.copyright, self.homepage)
                 l_key = index[i]
                 l_val = index[i+1]
 
-                key = str(text[last:last+l_key].tostring(), 'utf8')
-                val = str(text[last+l_key:last+l_key+l_val].tostring(), 'utf8')
+                key = str(text[last:last+l_key].tobytes(), 'utf8')
+                val = str(text[last+l_key:last+l_key+l_val].tobytes(), 'utf8')
                 stringDict[key] = val
 
                 last += (l_key + l_val)
