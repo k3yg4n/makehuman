@@ -557,23 +557,23 @@ def saveBinaryProxy(proxy, path):
 
 
         vars_ = dict(
-            #proxyType = np.fromstring(proxy.type, dtype='S1'),     # TODO store proxy type?
-            name = np.fromstring(proxy.name, dtype='S1'),
-            uuid = np.fromstring(proxy.uuid, dtype='S1'),
-            description = np.fromstring(proxy.description, dtype='S1'),
-            basemesh = np.fromstring(proxy.basemesh, dtype='S1'),
+            #proxyType = np.frombuffer(proxy.type.encode('utf-8'), dtype='S1'),     # TODO store proxy type?
+            name = np.frombuffer(proxy.name.encode('utf-8'), dtype='S1'),
+            uuid = np.frombuffer(proxy.uuid.encode('utf-8'), dtype='S1'),
+            description = np.frombuffer(proxy.description.encode('utf-8'), dtype='S1'),
+            basemesh = np.frombuffer(proxy.basemesh.encode('utf-8'), dtype='S1'),
             tags_str = tagStr,
             tags_idx = tagIdx,
             lic_str = licStr,
             lic_idx = licIdx,
             uvLayers_str = uvStr,
             uvLayers_idx = uvIdx,
-            obj_file = np.fromstring(_properPath(proxy.obj_file), dtype='S1'),
+            obj_file = np.frombuffer(_properPath(proxy.obj_file).encode('utf-8'), dtype='S1'),
             version = np.asarray(proxy.version, dtype=np.int32)
         )
 
         if proxy.material_file:
-            vars_["material_file"] = np.fromstring(_properPath(proxy.material_file), dtype='S1')
+            vars_["material_file"] = np.frombuffer(_properPath(proxy.material_file).encode('utf-8'), dtype='S1')
 
         if np.any(proxy.deleteVerts):
             vars_["deleteVerts"] = proxy.deleteVerts
@@ -608,7 +608,7 @@ def saveBinaryProxy(proxy, path):
         vars_['num_refverts'] = np.asarray(num_refverts, dtype=np.int32)
 
         if proxy.vertexBoneWeights_file:
-            vars_['vertexBoneWeights_file'] = np.fromstring(_properPath(proxy.vertexBoneWeights_file), dtype='S1')
+            vars_['vertexBoneWeights_file'] = np.frombuffer(_properPath(proxy.vertexBoneWeights_file).encode('utf-8'), dtype='S1')
 
         np.savez_compressed(fp, **vars_)
     os.utime(path, None)  # Ensure modification time is updated
@@ -624,12 +624,12 @@ def loadBinaryProxy(path, human, type):
 
     proxy = Proxy(path, proxyType, human)
 
-    proxy.name = str(npzfile['name'].tostring(), 'utf8')
-    proxy.uuid = str(npzfile['uuid'].tostring(), 'utf8')
-    proxy.basemesh = str(npzfile['basemesh'].tostring(), 'utf8')
+    proxy.name = str(npzfile['name'].tobytes(), 'utf8')
+    proxy.uuid = str(npzfile['uuid'].tobytes(), 'utf8')
+    proxy.basemesh = str(npzfile['basemesh'].tobytes(), 'utf8')
 
     if 'description' in npzfile:
-        proxy.description = str(npzfile['description'].tostring(), 'utf8')
+        proxy.description = str(npzfile['description'].tobytes(), 'utf8')
 
     if 'version' in npzfile:
         proxy.version = int(npzfile['version'])
@@ -678,14 +678,14 @@ def loadBinaryProxy(path, human, type):
 
     proxy.material = material.Material(proxy.name)
     if 'material_file' in npzfile:
-        proxy._material_file = str(npzfile['material_file'].tostring(), 'utf8')
+        proxy._material_file = str(npzfile['material_file'].tobytes(), 'utf8')
     if proxy.material_file:
         proxy.material.fromFile(proxy.material_file)
 
-    proxy._obj_file = str(npzfile['obj_file'].tostring(), 'utf8')
+    proxy._obj_file = str(npzfile['obj_file'].tobytes(), 'utf8')
 
     if 'vertexBoneWeights_file' in npzfile:
-        proxy._vertexBoneWeights_file = str(npzfile['vertexBoneWeights_file'].tostring(), 'utf8')
+        proxy._vertexBoneWeights_file = str(npzfile['vertexBoneWeights_file'].tobytes(), 'utf8')
         if proxy.vertexBoneWeights_file:
             from animation import VertexBoneWeights
             proxy.vertexBoneWeights = VertexBoneWeights.fromFile(proxy.vertexBoneWeights_file)
@@ -1012,7 +1012,7 @@ def peekMetadata(proxyFilePath, proxyType=None):
             # Binary proxy file
             npzfile = np.load(proxyFilePath)
 
-            uuid = str(npzfile['uuid'].tostring(), 'utf8')
+            uuid = str(npzfile['uuid'].tobytes(), 'utf8')
             tags = set(_unpackStringList(npzfile['tags_str'], npzfile['tags_idx']))
             return (uuid, tags)
         except Exception as e:
@@ -1043,7 +1043,7 @@ def _packStringList(strings):
         asbytes = bytearray(text,'utf-8')
         index.append(len(asbytes))
         text += string
-    text = np.fromstring(text, dtype='S1')
+    text = np.frombuffer(text.encode('utf-8'), dtype='S1')
     index = np.array(index, dtype=np.uint32)
     return text, index
 
@@ -1052,11 +1052,11 @@ def _unpackStringList(text, index):
     last = None
     for i in index:
         if last is not None:
-            name = str(text[last:i].tostring(), 'utf8')
+            name = str(text[last:i].tobytes(), 'utf8')
             strings.append(name)
         last = i
     if last is not None:
-        name = str(text[last:].tostring(), 'utf8')
+        name = str(text[last:].tobytes(), 'utf8')
         strings.append(name)
 
     return strings

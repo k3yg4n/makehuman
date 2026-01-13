@@ -3,6 +3,16 @@
 This is the main source code for the MakeHuman application as such. See "Getting started" below for instructions on how to get MakeHuman up and running. Mac users
 _should_ be able to use the same instructions as windows users, although this has not been thoroughly tested.
 
+## Keegan's Get Started
+1. `git clone https://github.com/k3yg4n/makehuman.git`
+2. In root directory: `python -m venv venv`
+3. `source ./venv/bin/activate`
+4. `pip install -r requirements.txt`
+5. Go to https://github.com/makehumancommunity/makehuman-assets, download as zip, extract it, copy `base` directory (the entire directory, not its contents) into `makehuman/data`.
+5. `cd makehuman` (the nested directory, not the root)
+6. `python3 ./makehuman.py`
+
+
 ## Current status
 
 At the point of writing this, the source code is almost ready for a stable release. 
