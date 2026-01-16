@@ -71,6 +71,8 @@ sys.modules["PyQt5.QtGui"] = MockQt()
 sys.modules["PyQt5.QtWidgets"] = MockQt()
 
 # Now import MakeHuman modules
+import numpy as np
+
 import log as mhlog
 import getpath
 import module3d
@@ -596,10 +598,22 @@ def load_rig(human, rig_path):
         raise FileNotFoundError(f"Rig file not found: {rig_path}")
 
     print(f"\nLoading rig from {rig_path}...")
-    rig = skeleton.load(rig_path, human.meshData)
-    human.setSkeleton(rig)
+
+    # First, load the default skeleton as the base skeleton
+    # This is required because the default skeleton has the vertex weights defined
+    # Other skeletons (like Unity rig) remap their weights from this reference
+    default_skel_path = getpath.getSysDataPath("rigs/default.mhskel")
+    print(f"  Loading default skeleton for vertex weights from {default_skel_path}...")
+    base_skel = skeleton.load(default_skel_path, human.meshData)
+    human.setBaseSkeleton(base_skel)
+
+    # Now load the user-specified rig (e.g., Unity rig) as the export skeleton
+    print(f"  Loading user skeleton from {rig_path}...")
+    user_rig = skeleton.load(rig_path, human.meshData)
+    human.setSkeleton(user_rig)
+
     print("Rig loaded and applied successfully!")
-    return rig
+    return user_rig
 
 
 def save_mhm(human, mhm_path):
@@ -672,7 +686,9 @@ def export_fbx(human, output_path, verbose=True):
         class FbxConfig:
             def __init__(self):
                 self.useRelPaths = False
-                self.useMaterials = True
+                self.useMaterials = (
+                    False  # Disable materials in headless mode (requires Qt)
+                )
                 self.binary = True
                 self.yUpFaceZ = True
                 self.yUpFaceX = False
@@ -690,6 +706,36 @@ def export_fbx(human, output_path, verbose=True):
 
             def setHuman(self, human):
                 self.human = human
+
+            @property
+            def meshOrientation(self):
+                if self.yUpFaceZ:
+                    return "yUpFaceZ"
+                if self.yUpFaceX:
+                    return "yUpFaceX"
+                if self.zUpFaceNegY:
+                    return "zUpFaceNegY"
+                if self.zUpFaceX:
+                    return "zUpFaceX"
+                return "yUpFaceZ"
+
+            @property
+            def localBoneAxis(self):
+                if self.localY:
+                    return "y"
+                if self.localX:
+                    return "x"
+                if self.localG:
+                    return "g"
+                return "y"
+
+            @property
+            def offset(self):
+                if self.feetOnGround and self.human:
+                    yOffset = -self.scale * self.human.getJointPosition("ground")[1]
+                    return np.asarray([0.0, yOffset, 0.0], dtype=np.float32)
+                else:
+                    return np.zeros(3, dtype=np.float32)
 
             def setupTexFolder(self, filepath):
                 self.outFolder = os.path.realpath(os.path.dirname(filepath))
@@ -719,9 +765,13 @@ def export_fbx(human, output_path, verbose=True):
 
     except Exception as e:
         if verbose:
+            import traceback
+
             print(f"\n  Warning: FBX export failed: {e}")
+            print("  Full traceback:")
+            traceback.print_exc()
             print(
-                "  The model configuration is complete, but FBX export encountered an issue."
+                "\n  The model configuration is complete, but FBX export encountered an issue."
             )
             print("  The .mhm file (if saved) can be used to export via MakeHuman GUI.")
         return False
