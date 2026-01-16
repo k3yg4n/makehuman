@@ -60,9 +60,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
         self.hasWarpTargets = False
 
-        self._name = ''
+        self._name = ""
         self._tags = set()
-        self._uuid = ''
+        self._uuid = ""
 
         self.MIN_AGE = 1.0
         self.MAX_AGE = 90.0
@@ -83,10 +83,34 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
         self.setDefaultValues()
 
-        self.bodyZones = ['l-eye','r-eye', 'jaw', 'nose', 'mouth', 'head', 'neck', 'torso', 'hip', 'pelvis', 'r-upperarm', 'l-upperarm', 'r-lowerarm', 'l-lowerarm', 'l-hand',
-                          'r-hand', 'r-upperleg', 'l-upperleg', 'r-lowerleg', 'l-lowerleg', 'l-foot', 'r-foot', 'ear']
+        self.bodyZones = [
+            "l-eye",
+            "r-eye",
+            "jaw",
+            "nose",
+            "mouth",
+            "head",
+            "neck",
+            "torso",
+            "hip",
+            "pelvis",
+            "r-upperarm",
+            "l-upperarm",
+            "r-lowerarm",
+            "l-lowerarm",
+            "l-hand",
+            "r-hand",
+            "r-upperleg",
+            "l-upperleg",
+            "r-lowerleg",
+            "l-lowerleg",
+            "l-foot",
+            "r-foot",
+            "ear",
+        ]
 
-        self.material = material.fromFile(getSysDataPath('skins/default.mhmat'))
+        # TODO (k3yg4n): Set the material to a plain green material corresponding to (0,255,0) in RGB.
+        self.material = material.fromFile(getSysDataPath("skins/default.mhmat"))
         self._defaultMaterial = material.Material().copyFrom(self.material)
         self._backUpMaterial = None
 
@@ -94,21 +118,29 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self.skeleton = None
 
         self._modifiers = dict()
-        self._modifier_varMapping = dict()              # Maps macro variable to the modifier group that modifies it
-        self._modifier_dependencyMapping = dict()       # Maps a macro variable to all the modifiers that depend on it
+        self._modifier_varMapping = (
+            dict()
+        )  # Maps macro variable to the modifier group that modifies it
+        self._modifier_dependencyMapping = (
+            dict()
+        )  # Maps a macro variable to all the modifiers that depend on it
         self._modifier_groups = dict()
         self._modifier_type_cache = dict()
 
-        self.blockEthnicUpdates = False                 # When set to True, changes to race are not normalized automatically
+        self.blockEthnicUpdates = (
+            False  # When set to True, changes to race are not normalized automatically
+        )
 
-        animation.AnimatedMesh.__init__(self, skel=None, mesh=self.meshData, vertexToBoneMapping=None)
+        animation.AnimatedMesh.__init__(
+            self, skel=None, mesh=self.meshData, vertexToBoneMapping=None
+        )
         # Make sure that shadow vertices are copied
         self.refreshStaticMeshes()
 
     def getName(self):
         return self._name
 
-    def setName(self, name=''):
+    def setName(self, name=""):
         self._name = name
 
     humanName = property(getName, setName)
@@ -118,17 +150,17 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
     def setTags(self, tags):
         if not isinstance(tags, set):
-            raise ValueError('Parameter must be set type')
+            raise ValueError("Parameter must be set type")
         else:
             tset = set()
             for t in tags:
-                tset.add(t[:25]) # Max. tag length is 25
+                tset.add(t[:25])  # Max. tag length is 25
             self._tags = tset
 
     tags = property(getTags, setTags)
 
-    def addTag(self, tag=''):
-        self._tags.add(tag.lower()[:25]) # Max. tag length is 25
+    def addTag(self, tag=""):
+        self._tags.add(tag.lower()[:25])  # Max. tag length is 25
 
     def clearTags(self):
         self._tags.clear()
@@ -137,15 +169,14 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         if self._uuid:
             return self._uuid
         else:
-            return ''
+            return ""
 
-    def setUuid(self, _uuid=''):
+    def setUuid(self, _uuid=""):
         self._uuid = _uuid
 
     def newUuid(self):
         self._uuid = str(uuid4())
         return self._uuid
-
 
     def setProxy(self, proxy):
         oldPxy = self.getProxy()
@@ -160,17 +191,18 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             self._updateMeshVertexWeights(self.getProxyMesh())
             self.refreshPose()
 
-        event = events3d.HumanEvent(self, 'proxyChange')
-        event.proxy = 'human'
-        self.callEvent('onChanged', event)
+        event = events3d.HumanEvent(self, "proxyChange")
+        event.proxy = "human"
+        self.callEvent("onChanged", event)
 
     # TODO introduce better system for managing proxies, nothing done for clothes yet
     def setHairProxy(self, proxy):
         self._swapProxies(self._hairProxy, proxy)
         self._hairProxy = proxy
-        event = events3d.HumanEvent(self, 'proxyChange')
-        event.proxy = 'hair'
-        self.callEvent('onChanged', event)
+        event = events3d.HumanEvent(self, "proxyChange")
+        event.proxy = "hair"
+        self.callEvent("onChanged", event)
+
     def getHairProxy(self):
         return self._hairProxy
 
@@ -179,9 +211,10 @@ class Human(guicommon.Object, animation.AnimatedMesh):
     def setEyesProxy(self, proxy):
         self._swapProxies(self._eyesProxy, proxy)
         self._eyesProxy = proxy
-        event = events3d.HumanEvent(self, 'proxyChange')
-        event.proxy = 'eyes'
-        self.callEvent('onChanged', event)
+        event = events3d.HumanEvent(self, "proxyChange")
+        event.proxy = "eyes"
+        self.callEvent("onChanged", event)
+
     def getEyesProxy(self):
         return self._eyesProxy
 
@@ -190,9 +223,10 @@ class Human(guicommon.Object, animation.AnimatedMesh):
     def setEyebrowsProxy(self, proxy):
         self._swapProxies(self._eyebrowsProxy, proxy)
         self._eyebrowsProxy = proxy
-        event = events3d.HumanEvent(self, 'proxyChange')
-        event.proxy = 'eyebrows'
-        self.callEvent('onChanged', event)
+        event = events3d.HumanEvent(self, "proxyChange")
+        event.proxy = "eyebrows"
+        self.callEvent("onChanged", event)
+
     def getEyebrowsProxy(self):
         return self._eyebrowsProxy
 
@@ -201,9 +235,10 @@ class Human(guicommon.Object, animation.AnimatedMesh):
     def setEyelashesProxy(self, proxy):
         self._swapProxies(self._eyelashesProxy, proxy)
         self._eyelashesProxy = proxy
-        event = events3d.HumanEvent(self, 'proxyChange')
-        event.proxy = 'eyelashes'
-        self.callEvent('onChanged', event)
+        event = events3d.HumanEvent(self, "proxyChange")
+        event.proxy = "eyelashes"
+        self.callEvent("onChanged", event)
+
     def getEyelashesProxy(self):
         return self._eyelashesProxy
 
@@ -212,9 +247,10 @@ class Human(guicommon.Object, animation.AnimatedMesh):
     def setTeethProxy(self, proxy):
         self._swapProxies(self._teethProxy, proxy)
         self._teethProxy = proxy
-        event = events3d.HumanEvent(self, 'proxyChange')
-        event.proxy = 'teeth'
-        self.callEvent('onChanged', event)
+        event = events3d.HumanEvent(self, "proxyChange")
+        event.proxy = "teeth"
+        self.callEvent("onChanged", event)
+
     def getTeethProxy(self):
         return self._teethProxy
 
@@ -223,9 +259,10 @@ class Human(guicommon.Object, animation.AnimatedMesh):
     def setTongueProxy(self, proxy):
         self._swapProxies(self._tongueProxy, proxy)
         self._tongueProxy = proxy
-        event = events3d.HumanEvent(self, 'proxyChange')
-        event.proxy = 'tongue'
-        self.callEvent('onChanged', event)
+        event = events3d.HumanEvent(self, "proxyChange")
+        event.proxy = "tongue"
+        self.callEvent("onChanged", event)
+
     def getTongueProxy(self):
         return self._tongueProxy
 
@@ -242,23 +279,23 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         uuid = proxy.getUuid()
         self._swapProxies(self._clothesProxies.get(uuid, None), proxy)
         self._clothesProxies[uuid] = proxy
-        event = events3d.HumanEvent(self, 'proxyChange')
-        event.proxy = 'clothes'
-        event.action = 'add'
+        event = events3d.HumanEvent(self, "proxyChange")
+        event.proxy = "clothes"
+        event.action = "add"
         event.proxy_obj = proxy
-        self.callEvent('onChanged', event)
+        self.callEvent("onChanged", event)
 
     def removeClothesProxy(self, uuid):
         self._swapProxies(self._clothesProxies.get(uuid, None), None)
-        event = events3d.HumanEvent(self, 'proxyChange')
+        event = events3d.HumanEvent(self, "proxyChange")
         proxy = None
         if uuid in self._clothesProxies:
             proxy = self._clothesProxies[uuid]
             del self._clothesProxies[uuid]
-        event.proxy = 'clothes'
-        event.action = 'remove'
+        event.proxy = "clothes"
+        event.action = "remove"
         event.proxy_obj = proxy
-        self.callEvent('onChanged', event)
+        self.callEvent("onChanged", event)
 
     def _swapProxies(self, oldPxy, newPxy):
         """
@@ -280,8 +317,8 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         mesh = self.meshData
         group_mask = np.ones(len(mesh._faceGroups), dtype=bool)
         for g in mesh._faceGroups:
-            g.name = str(g.name) 
-            if g.name.startswith('joint-') or g.name.startswith('helper-'):
+            g.name = str(g.name)
+            if g.name.startswith("joint-") or g.name.startswith("helper-"):
                 group_mask[g.idx] = False
         face_mask = group_mask[mesh.group]
         self._staticFaceMask = face_mask
@@ -296,7 +333,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         has the tag "genitals" assinged (convention).
         """
         if self.isProxied():
-            if 'genitals' in self.proxy.tags or 'Genitals' in self.proxy.tags:
+            if "genitals" in self.proxy.tags or "Genitals" in self.proxy.tags:
                 return True
         return False
 
@@ -307,8 +344,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         :return:
         """
         import warpmodifier
+
         log.debug("human.targetsDetailStack:")
-        for path,value in self.targetsDetailStack.items():
+        for path, value in self.targetsDetailStack.items():
             try:
                 target = algos3d._targetBuffer[canonicalPath(path)]
             except KeyError:
@@ -330,21 +368,24 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         :return:
         """
         import warpmodifier
+
         log.debug("algos3d.targetBuffer:")
-        for path,target in algos3d._targetBuffer.items():
+        for path, target in algos3d._targetBuffer.items():
             if isinstance(target, warpmodifier.WarpTarget):
                 stars = " *** "
             else:
                 stars = " "
             if all or path[0:4] != "data":
                 log.debug("  %s%s:%s %d" % (stars, path, target, vertsToList))
-                for n,vn in enumerate(target.verts[0:vertsToList]):
-                    log.debug("   %d : %s %s" % (vn, target.data[n], self.mesh.coord[vn]))
+                for n, vn in enumerate(target.verts[0:vertsToList]):
+                    log.debug(
+                        "   %d : %s %s" % (vn, target.data[n], self.mesh.coord[vn])
+                    )
 
     # Proxy and object getters.
     # Returns only existing proxies
 
-    '''
+    """
     def getProxyObjects(self):
         objs = []
         for obj in [
@@ -360,9 +401,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         for obj in self.clothesObjs.values():
             objs.append(obj)
         return objs
-    '''
+    """
 
-    def getProxies(self, includeHumanProxy = True):
+    def getProxies(self, includeHumanProxy=True):
         proxies = []
         for pxy in [
             self.hairProxy,
@@ -371,7 +412,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             self.eyelashesProxy,
             self.teethProxy,
             self.tongueProxy,
-            ]:
+        ]:
             if pxy != None:
                 proxies.append(pxy)
         if includeHumanProxy and self.proxy:
@@ -383,20 +424,20 @@ class Human(guicommon.Object, animation.AnimatedMesh):
     def getTypedSimpleProxies(self, ptype):
         ptype = ptype.capitalize()
         table = {
-            'Hair' :     self.hairProxy,
-            'Eyes' :     self.eyesProxy,
-            'Eyebrows' : self.eyebrowsProxy,
-            'Eyelashes': self.eyelashesProxy,
-            'Teeth':     self.teethProxy,
-            'Tongue':    self.tongueProxy,
-            }
+            "Hair": self.hairProxy,
+            "Eyes": self.eyesProxy,
+            "Eyebrows": self.eyebrowsProxy,
+            "Eyelashes": self.eyelashesProxy,
+            "Teeth": self.teethProxy,
+            "Tongue": self.tongueProxy,
+        }
         try:
             return table[ptype]
         except KeyError:
             return None
 
     def getProxyObjects(self):
-        return [ pxy.object for pxy in self.getProxies(includeHumanProxy=False) ]
+        return [pxy.object for pxy in self.getProxies(includeHumanProxy=False)]
 
     def getObjects(self, excludeZeroFaceObjs=False):
         """
@@ -408,8 +449,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         """
         result = [self] + self.getProxyObjects()
         if excludeZeroFaceObjs:
-            result = [o for o in result if \
-                               o.mesh.getFaceCount(excludeMaskedFaces=True) > 0]
+            result = [
+                o for o in result if o.mesh.getFaceCount(excludeMaskedFaces=True) > 0
+            ]
         return result
 
     # Overriding hide and show to account for both human base and the hairs!
@@ -420,7 +462,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             if obj:
                 obj.show()
         self.setVisibility(True)
-        self.callEvent('onShown', self)
+        self.callEvent("onShown", self)
 
     def hide(self):
 
@@ -429,18 +471,18 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             if obj:
                 obj.hide()
         self.setVisibility(False)
-        self.callEvent('onHidden', self)
+        self.callEvent("onHidden", self)
 
     # Overriding methods to account for both hair and base object
 
     def setPosition(self, position):
-        dv = [x-y for x, y in zip(position, self.getPosition())]
+        dv = [x - y for x, y in zip(position, self.getPosition())]
         guicommon.Object.setPosition(self, position)
         for obj in self.getProxyObjects():
             if obj:
-                obj.setPosition([x+y for x, y in zip(obj.getPosition(), dv)])
+                obj.setPosition([x + y for x, y in zip(obj.getPosition(), dv)])
 
-        self.callEvent('onTranslated', self)
+        self.callEvent("onTranslated", self)
 
     def setRotation(self, rotation):
         guicommon.Object.setRotation(self, rotation)
@@ -448,7 +490,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             if obj:
                 obj.setRotation(rotation)
 
-        self.callEvent('onRotated', self)
+        self.callEvent("onRotated", self)
 
     def setSolid(self, *args, **kwargs):
         guicommon.Object.setSolid(self, *args, **kwargs)
@@ -459,8 +501,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
     def setSubdivided(self, flag, *args, **kwargs):
         if flag != self.isSubdivided():
             proxies = [obj for obj in self.getProxyObjects() if obj]
-            progress = Progress([len(self.mesh.coord)] +
-                                [len(obj.mesh.coord) for obj in proxies])
+            progress = Progress(
+                [len(self.mesh.coord)] + [len(obj.mesh.coord) for obj in proxies]
+            )
 
             guicommon.Object.setSubdivided(self, flag, *args, **kwargs)
             progress.step()
@@ -469,9 +512,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
                 obj.setSubdivided(flag, *args, **kwargs)
                 progress.step()
 
-            self.callEvent('onChanged', events3d.HumanEvent(self, 'smooth'))
+            self.callEvent("onChanged", events3d.HumanEvent(self, "smooth"))
 
-    def setGender(self, gender, updateModifier = True):
+    def setGender(self, gender, updateModifier=True):
         """
         Sets the gender of the model. 0 is female, 1 is male.
 
@@ -483,7 +526,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             of the attribute to apply.
         """
         if updateModifier:
-            modifier = self.getModifier('macrodetails/Gender')
+            modifier = self.getModifier("macrodetails/Gender")
             modifier.setValue(gender)
             self.applyAllTargets()
             return
@@ -493,7 +536,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             return
         self.gender = gender
         self._setGenderVals()
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'gender'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "gender"))
 
     def getGender(self):
         """
@@ -508,9 +551,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         None if both genders are equally represented.
         """
         if self.getGender() < 0.5:
-            return 'female'
+            return "female"
         elif self.getGender() > 0.5:
-            return 'male'
+            return "male"
         else:
             return None
 
@@ -518,7 +561,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self.maleVal = self.gender
         self.femaleVal = 1 - self.gender
 
-    def setAge(self, age, updateModifier = True):
+    def setAge(self, age, updateModifier=True):
         """
         Sets the age of the model. 0 for 0 years old, 1 is 70. To set a
         particular age in years, use the formula age_value = age_in_years / 70.
@@ -531,7 +574,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             of the attribute to apply.
         """
         if updateModifier:
-            modifier = self.getModifier('macrodetails/Age')
+            modifier = self.getModifier("macrodetails/Age")
             modifier.setValue(age)
             self.applyAllTargets()
             return
@@ -541,7 +584,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             return
         self.age = age
         self._setAgeVals()
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'age'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "age"))
 
     def getAge(self):
         """
@@ -556,7 +599,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         if self.getAge() < 0.5:
             return self.MIN_AGE + ((self.MID_AGE - self.MIN_AGE) * 2) * self.getAge()
         else:
-            return self.MID_AGE + ((self.MAX_AGE - self.MID_AGE) * 2) * (self.getAge() - 0.5)
+            return self.MID_AGE + ((self.MAX_AGE - self.MID_AGE) * 2) * (
+                self.getAge() - 0.5
+            )
 
     def setAgeYears(self, ageYears, updateModifier=True):
         """
@@ -564,11 +609,16 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         """
         ageYears = float(ageYears)
         if ageYears < self.MIN_AGE or ageYears > self.MAX_AGE:
-            raise RuntimeError("Invalid age specified, should be minimum %s and maximum %s." % (self.MIN_AGE, self.MAX_AGE))
+            raise RuntimeError(
+                "Invalid age specified, should be minimum %s and maximum %s."
+                % (self.MIN_AGE, self.MAX_AGE)
+            )
         if ageYears < self.MID_AGE:
             age = (ageYears - self.MIN_AGE) / ((self.MID_AGE - self.MIN_AGE) * 2)
         else:
-            age = ( (ageYears - self.MID_AGE) / ((self.MAX_AGE - self.MID_AGE) * 2) ) + 0.5
+            age = (
+                (ageYears - self.MID_AGE) / ((self.MAX_AGE - self.MID_AGE) * 2)
+            ) + 0.5
         self.setAge(age, updateModifier)
 
     def _setAgeVals(self):
@@ -591,7 +641,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         if self.age < 0.5:
             self.oldVal = 0.0
             self.babyVal = max(0.0, 1 - self.age * 5.333)  # 1/0.1875 = 5.333
-            self.youngVal = max(0.0, (self.age-0.1875) * 3.2) # 1/(0.5-0.1875) = 3.2
+            self.youngVal = max(0.0, (self.age - 0.1875) * 3.2)  # 1/(0.5-0.1875) = 3.2
             self.childVal = max(0.0, min(1.0, 5.333 * self.age) - self.youngVal)
         else:
             self.childVal = 0.0
@@ -599,7 +649,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             self.oldVal = max(0.0, self.age * 2 - 1)
             self.youngVal = 1 - self.oldVal
 
-    def setWeight(self, weight, updateModifier = True):
+    def setWeight(self, weight, updateModifier=True):
         """
         Sets the amount of weight of the model. 0 for underweight, 1 for heavy.
 
@@ -611,7 +661,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             of the attribute to apply.
         """
         if updateModifier:
-            modifier = self.getModifier('macrodetails-universal/Weight')
+            modifier = self.getModifier("macrodetails-universal/Weight")
             modifier.setValue(weight)
             self.applyAllTargets()
             return
@@ -621,16 +671,16 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             return
         self.weight = weight
         self._setWeightVals()
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'weight'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "weight"))
 
     def getWeight(self):
         return self.weight
 
     def getBsa(self):
-        return calculateSurface(self.meshData, vertGroups=['body'])/100
+        return calculateSurface(self.meshData, vertGroups=["body"]) / 100
 
     def getVolume(self):
-        return calculateVolume(self.meshData, vertGroups=['body'])/1000
+        return calculateVolume(self.meshData, vertGroups=["body"]) / 1000
 
     def getWeightKg(self):
         # Estimating weight using Mosteller's formula for body surface area estimation
@@ -642,7 +692,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self.minweightVal = max(0.0, 1 - self.weight * 2)
         self.averageweightVal = 1 - (self.maxweightVal + self.minweightVal)
 
-    def setMuscle(self, muscle, updateModifier = True):
+    def setMuscle(self, muscle, updateModifier=True):
         """
         Sets the amount of muscle of the model. 0 for flacid, 1 for muscular.
 
@@ -654,7 +704,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             of the attribute to apply.
         """
         if updateModifier:
-            modifier = self.getModifier('macrodetails-universal/Muscle')
+            modifier = self.getModifier("macrodetails-universal/Muscle")
             modifier.setValue(muscle)
             self.applyAllTargets()
             return
@@ -664,7 +714,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             return
         self.muscle = muscle
         self._setMuscleVals()
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'muscle'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "muscle"))
 
     def getMuscle(self):
         return self.muscle
@@ -674,36 +724,45 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self.minmuscleVal = max(0.0, 1 - self.muscle * 2)
         self.averagemuscleVal = 1 - (self.maxmuscleVal + self.minmuscleVal)
 
-    def setHeight(self, height, updateModifier = True):
+    def setHeight(self, height, updateModifier=True):
         if updateModifier:
-            modifier = self.getModifier('macrodetails-height/Height')
+            modifier = self.getModifier("macrodetails-height/Height")
             modifier.setValue(height)
             self.applyAllTargets()
             return
 
         height = min(max(height, 0.0), 1.0)
+        log.message("updating height to: " + str(height))
         if self.height == height:
             return
         self.height = height
         self._setHeightVals()
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'height'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "height"))
 
     def getHeight(self):
         return self.height
+
+    # TODO (k3yg4n): Finish implementing this method.
+    def setHeightCm(self, heightCm):
+        """
+        Set the height of the model in cm.
+        Uses a binary search of the height slider range (0-1) to find the closest match to the desired height in cm.
+        """
+        return
 
     def getHeightCm(self):
         """
         The height in cm.
         """
         bBox = self.getBoundingBox()
-        return 10*(bBox[1][1]-bBox[0][1])
+        return 10 * (bBox[1][1] - bBox[0][1])
 
     def getBoundingBox(self):
         """
         Returns the bounding box of the basemesh without the helpers, ignoring
         any other facemask.
         """
-        return self.meshData.calcBBox(fixedFaceMask = self.staticFaceMask)
+        return self.meshData.calcBBox(fixedFaceMask=self.staticFaceMask)
 
     def _setHeightVals(self):
         self.maxheightVal = max(0.0, self.height * 2 - 1)
@@ -713,9 +772,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         else:
             self.averageheightVal = 1 - self.minheightVal
 
-    def setBreastSize(self, size, updateModifier = True):
+    def setBreastSize(self, size, updateModifier=True):
         if updateModifier:
-            modifier = self.getModifier('breast/BreastSize')
+            modifier = self.getModifier("breast/BreastSize")
             modifier.setValue(size)
             self.applyAllTargets()
             return
@@ -725,7 +784,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             return
         self.breastSize = size
         self._setBreastSizeVals()
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'breastSize'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "breastSize"))
 
     def getBreastSize(self):
         return self.breastSize
@@ -738,9 +797,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         else:
             self.averagecupVal = 1 - self.mincupVal
 
-    def setBreastFirmness(self, firmness, updateModifier = True):
+    def setBreastFirmness(self, firmness, updateModifier=True):
         if updateModifier:
-            modifier = self.getModifier('breast/BreastFirmness')
+            modifier = self.getModifier("breast/BreastFirmness")
             modifier.setValue(firmness)
             self.applyAllTargets()
             return
@@ -750,7 +809,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             return
         self.breastFirmness = firmness
         self._setBreastFirmnessVals()
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'breastFirmness'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "breastFirmness"))
 
     def getBreastFirmness(self):
         return self.breastFirmness
@@ -764,9 +823,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         else:
             self.averagefirmnessVal = 1 - self.minfirmnessVal
 
-    def setBodyProportions(self, proportion, updateModifier = True):
+    def setBodyProportions(self, proportion, updateModifier=True):
         if updateModifier:
-            modifier = self.getModifier('macrodetails-proportions/BodyProportions')
+            modifier = self.getModifier("macrodetails-proportions/BodyProportions")
             modifier.setValue(proportion)
             self.applyAllTargets()
             return
@@ -776,7 +835,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             return
         self.bodyProportions = proportion
         self._setBodyProportionVals()
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'bodyProportions'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "bodyProportions"))
 
     def _setBodyProportionVals(self):
         self.idealproportionsVal = max(0.0, self.bodyProportions * 2 - 1)
@@ -790,9 +849,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
     def getBodyProportions(self):
         return self.bodyProportions
 
-    def setCaucasian(self, caucasian, sync=True, updateModifier = True):
+    def setCaucasian(self, caucasian, sync=True, updateModifier=True):
         if updateModifier:
-            modifier = self.getModifier('macrodetails/Caucasian')
+            modifier = self.getModifier("macrodetails/Caucasian")
             modifier.setValue(caucasian)
             self.applyAllTargets()
             return
@@ -801,16 +860,16 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self.caucasianVal = caucasian
 
         if sync and not self.blockEthnicUpdates:
-            self._setEthnicVals('caucasian')
+            self._setEthnicVals("caucasian")
 
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'caucasian'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "caucasian"))
 
     def getCaucasian(self):
         return self.caucasianVal
 
-    def setAfrican(self, african, sync=True, updateModifier = True):
+    def setAfrican(self, african, sync=True, updateModifier=True):
         if updateModifier:
-            modifier = self.getModifier('macrodetails/African')
+            modifier = self.getModifier("macrodetails/African")
             modifier.setValue(african)
             self.applyAllTargets()
             return
@@ -819,16 +878,16 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self.africanVal = african
 
         if sync and not self.blockEthnicUpdates:
-            self._setEthnicVals('african')
+            self._setEthnicVals("african")
 
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'african'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "african"))
 
     def getAfrican(self):
         return self.africanVal
 
-    def setAsian(self, asian, sync=True, updateModifier = True):
+    def setAsian(self, asian, sync=True, updateModifier=True):
         if updateModifier:
-            modifier = self.getModifier('macrodetails/Asian')
+            modifier = self.getModifier("macrodetails/Asian")
             modifier.setValue(asian)
             self.applyAllTargets()
             return
@@ -837,9 +896,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self.asianVal = asian
 
         if sync and not self.blockEthnicUpdates:
-            self._setEthnicVals('asian')
+            self._setEthnicVals("asian")
 
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'asian'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "asian"))
 
     def getAsian(self):
         return self.asianVal
@@ -848,16 +907,17 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         """
         Normalize the ethnic values (so that they sum to 1).
         """
+
         def _getVal(ethnic):
-            return getattr(self, ethnic+'Val')
+            return getattr(self, ethnic + "Val")
 
         def _setVal(ethnic, value):
-            setattr(self, ethnic+'Val', value)
+            setattr(self, ethnic + "Val", value)
 
         def _closeTo(value, limit, epsilon=0.001):
             return abs(value - limit) <= epsilon
 
-        ethnics = ['african', 'asian', 'caucasian']
+        ethnics = ["african", "asian", "caucasian"]
         remaining = 1.0
         if exclude:
             ethnics.remove(exclude)
@@ -876,7 +936,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             elif exclude and _closeTo(_getVal(exclude), 1.0):
                 # One ethnicity is 1, the rest is 0
                 for e in ethnics:
-                    _setVal(e, 0.0 )
+                    _setVal(e, 0.0)
                 _setVal(exclude, 1)
             else:
                 # Increase values of other races (that were 0) to hit total sum of 1
@@ -885,7 +945,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
                 self._setEthnicVals(exclude)  # Re-normalize
         else:
             for e in ethnics:
-                _setVal(e, remaining * (_getVal(e) / otherTotal) )
+                _setVal(e, remaining * (_getVal(e) / otherTotal))
 
     def getEthnicity(self):
         """
@@ -895,21 +955,21 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         """
         if self.getAsian() > self.getAfrican():
             if self.getAsian() > self.getCaucasian():
-                return 'asian'
+                return "asian"
             elif self.getCaucasian() > self.getAsian():
-                return 'caucasian'
+                return "caucasian"
             else:
                 return None
         elif self.getAfrican() > self.getAsian():
             if self.getAfrican() > self.getCaucasian():
-                return 'african'
+                return "african"
             elif self.getCaucasian() > self.getAfrican():
-                return 'caucasian'
+                return "caucasian"
             else:
                 return None
         # At this point we've established that asian == african
         elif self.getCaucasian() > self.getAsian():
-            return 'caucasian'
+            return "caucasian"
         else:
             return None
 
@@ -974,7 +1034,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         try:
             return self._modifier_groups[groupName]
         except:
-            log.warning('Modifier group %s does not exist.', groupName)
+            log.warning("Modifier group %s does not exist.", groupName)
             return []
 
     def getModifiersByType(self, classType):
@@ -993,11 +1053,16 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         """
         Attach a new modifier to this human.
         """
-        #log.debug("Adding modifier of type %s: %s", type(modifier), modifier.fullName)
+        # log.debug("Adding modifier of type %s: %s", type(modifier), modifier.fullName)
 
         if modifier.fullName in self._modifiers:
-            log.error("Modifier with name %s is already attached to human.", modifier.fullName)
-            raise RuntimeError("Modifier with name %s is already attached to human." % modifier.fullName)
+            log.error(
+                "Modifier with name %s is already attached to human.", modifier.fullName
+            )
+            raise RuntimeError(
+                "Modifier with name %s is already attached to human."
+                % modifier.fullName
+            )
 
         self._modifier_type_cache = dict()
 
@@ -1008,19 +1073,31 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self._modifier_groups[modifier.groupName].append(modifier)
 
         # Update dependency mapping
-        if modifier.macroVariable and modifier.macroVariable != 'None':
-            if modifier.macroVariable in self._modifier_varMapping and \
-               self._modifier_varMapping[modifier.macroVariable] != modifier.groupName:
-                log.error("Error, multiple modifier groups setting var %s (%s and %s)", modifier.macroVariable, modifier.groupName, self._modifier_varMapping[modifier.macroVariable])
+        if modifier.macroVariable and modifier.macroVariable != "None":
+            if (
+                modifier.macroVariable in self._modifier_varMapping
+                and self._modifier_varMapping[modifier.macroVariable]
+                != modifier.groupName
+            ):
+                log.error(
+                    "Error, multiple modifier groups setting var %s (%s and %s)",
+                    modifier.macroVariable,
+                    modifier.groupName,
+                    self._modifier_varMapping[modifier.macroVariable],
+                )
             else:
                 self._modifier_varMapping[modifier.macroVariable] = modifier.groupName
                 # Update any new backwards references that might be influenced by this change (to make it independent of order of adding modifiers)
-                toRemove = set()  # Modifiers to remove again from backwards map because they belogn to the same group as the modifier controlling the var
+                toRemove = (
+                    set()
+                )  # Modifiers to remove again from backwards map because they belogn to the same group as the modifier controlling the var
                 dep = modifier.macroVariable
-                for affectedModifierGroup in self._modifier_dependencyMapping.get(dep, []):
+                for affectedModifierGroup in self._modifier_dependencyMapping.get(
+                    dep, []
+                ):
                     if affectedModifierGroup == modifier.groupName:
                         toRemove.add(affectedModifierGroup)
-                        #log.debug('REMOVED from backwards map again %s', affectedModifierGroup)
+                        # log.debug('REMOVED from backwards map again %s', affectedModifierGroup)
                 if len(toRemove) > 0:
                     if len(toRemove) == len(self._modifier_dependencyMapping[dep]):
                         del self._modifier_dependencyMapping[dep]
@@ -1042,7 +1119,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             if modifier.isMacro():
                 self.updateMacroModifiers()
 
-    def getModifierDependencies(self, modifier, filter = None):
+    def getModifierDependencies(self, modifier, filter=None):
         """
         Retrieve all modifiers that should be updated if the specified modifier
         is updated. (forward dependency mapping)
@@ -1061,15 +1138,15 @@ class Human(guicommon.Object, animation.AnimatedMesh):
                         if depMGroup in filter:
                             result.add(depMGroup)
                             if len(result) == len(filter):
-                                return result   # Early out
+                                return result  # Early out
                     else:
                         result.add(depMGroup)
         return result
 
-    def getModifiersAffectedBy(self, modifier, filter = None):
+    def getModifiersAffectedBy(self, modifier, filter=None):
         """
         Reverse dependency search. Returns all modifier groups to update that
-        are affected by the change in the specified modifier. (reverse 
+        are affected by the change in the specified modifier. (reverse
         dependency mapping)
         """
         result = self._modifier_dependencyMapping.get(modifier.macroVariable, [])
@@ -1089,7 +1166,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
                 # Update dependency map
                 reverseMapping = dict()
-                for k,v in self._modifier_varMapping.items():
+                for k, v in self._modifier_varMapping.items():
                     if v not in reverseMapping:
                         reverseMapping[v] = []
                     reverseMapping[v].append(k)
@@ -1110,7 +1187,11 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
             self._modifier_type_cache = dict()
         except:
-            log.debug('Failed to remove modifier %s from human.', modifier.fullName, exc_info=True)
+            log.debug(
+                "Failed to remove modifier %s from human.",
+                modifier.fullName,
+                exc_info=True,
+            )
             pass
 
     def _getModifierTargets(self):
@@ -1118,7 +1199,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         Retrieve all targets controlled by modifiers currently attached to this
         human.
         """
-        return set( [t[0] for m in self.modifiers for t in m.targets] )
+        return set([t[0] for m in self.modifiers for t in m.targets])
 
     def getRestposeCoordinates(self):
         """
@@ -1136,13 +1217,18 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             return self.getBaseSkeleton().getJointPosition(jointName, self, rest_coord)
         else:
             import skeleton
+
             return skeleton._getHumanJointPosition(self, jointName, rest_coord)
 
     def getJoints(self):
         """
         Return names of joint positions defined as joint helpers on the basemesh.
         """
-        return [ fg_name for fg_name in self.meshData.getFaceGroups() if fg_name.startswith('joint-') ]
+        return [
+            fg_name
+            for fg_name in self.meshData.getFaceGroups()
+            if fg_name.startswith("joint-")
+        ]
 
     def applyAllTargets(self, update=True):
         """
@@ -1160,8 +1246,10 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
         # Apply targets to seedmesh coordinates
         itprog = Progress(len(self.targetsDetailStack))
-        for (targetPath, morphFactor) in self.targetsDetailStack.items():
-            algos3d.loadTranslationTarget(self.meshData, targetPath, morphFactor, None, 0, 0)
+        for targetPath, morphFactor in self.targetsDetailStack.items():
+            algos3d.loadTranslationTarget(
+                self.meshData, targetPath, morphFactor, None, 0, 0
+            )
             itprog.step()
 
         # Make sure self.getRestposeCoordinates is up-to-date directly (required for proxy fitting)
@@ -1170,21 +1258,21 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         # Update (body) proxy
         self.updateProxyMesh()
 
-        #self.traceStack(all=True)
-        #self.traceBuffer(all=True, vertsToList=0)
+        # self.traceStack(all=True)
+        # self.traceBuffer(all=True, vertsToList=0)
 
         # Update skeleton joint positions (before human is posed)
         if self.getBaseSkeleton():
             log.debug("Updating skeleton joint positions")
             self.getBaseSkeleton().updateJoints(self.meshData)
-            self.resetBakedAnimations()    # TODO decide whether we require calling this manually, or whether animatedMesh automatically tracks updates of skeleton and updates accordingly
+            self.resetBakedAnimations()  # TODO decide whether we require calling this manually, or whether animatedMesh automatically tracks updates of skeleton and updates accordingly
 
         if self.skeleton:
             self.skeleton.dirty = True
 
-        self.callEvent('onChanged', events3d.HumanEvent(self, 'targets'))
+        self.callEvent("onChanged", events3d.HumanEvent(self, "targets"))
 
-        # Restore pose, and shadow copy of vertex positions 
+        # Restore pose, and shadow copy of vertex positions
         # (We do this after onChanged event so that proxies are already updated)
         self.refreshStaticMeshes()  # TODO document: an external plugin that modifies the rest pose verts outside of an onHumanChang(ing/ed) event should explicitly call this method on the human
 
@@ -1223,7 +1311,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         **Parameters:** None.
 
         """
-        self.symmetrize('l')
+        self.symmetrize("l")
 
     def applySymmetryRight(self):
         """
@@ -1233,9 +1321,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         **Parameters:** None.
 
         """
-        self.symmetrize('r')
+        self.symmetrize("r")
 
-    def symmetrize(self, direction='r'):
+    def symmetrize(self, direction="r"):
         """
         This method applies either left to right or right to left symmetry to
         the currently selected body parts.
@@ -1249,14 +1337,14 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             symmetry (\"r\") or right to left symmetry (\"l\").
 
         """
-        if direction == 'l':
+        if direction == "l":
             # Apply r to l
-            src = 'r'
-            #trg = 'l'
+            src = "r"
+            # trg = 'l'
         else:
             # Apply l to r
-            src = 'l'
-            #trg = 'r'
+            src = "l"
+            # trg = 'r'
 
         for modifier in self.modifiers:
             if modifier.getSymmetrySide() == src:
@@ -1267,12 +1355,14 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
         # TODO emit event?
 
+    # Default values for the human are set here.
+    # Perhaps we could just change this to a function that sets the human params according to command line args.
     def setDefaultValues(self):
         self.age = 0.5
         self.gender = 0.5
         self.weight = 0.5
         self.muscle = 0.5
-        self.height = 0.5
+        self.height = 0.8
         self.breastSize = 0.5
         self.breastFirmness = 0.5
         self.bodyProportions = 0.5
@@ -1286,9 +1376,9 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         self._setBreastFirmnessVals()
         self._setBodyProportionVals()
 
-        self.caucasianVal = 1.0/3
-        self.asianVal = 1.0/3
-        self.africanVal = 1.0/3
+        self.caucasianVal = 1.0 / 3
+        self.asianVal = 1.0 / 3
+        self.africanVal = 1.0 / 3
 
     def resetMeshValues(self):
         self.setSubdivided(False, update=False)
@@ -1300,14 +1390,14 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
         self.targetsDetailStack = {}
 
-        self.setUuid('')
-        self.setName('')
+        self.setUuid("")
+        self.setName("")
         self.clearTags()
 
         self.setMaterial(self._defaultMaterial)
 
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'reset'))
-        self.callEvent('onChanged', events3d.HumanEvent(self, 'reset'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "reset"))
+        self.callEvent("onChanged", events3d.HumanEvent(self, "reset"))
 
     def _resetProxies(self):
         """
@@ -1327,29 +1417,30 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         return super(Human, self).getMaterial()
 
     def setMaterial(self, mat):
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'material'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "material"))
         super(Human, self).setMaterial(mat)
-        self.callEvent('onChanged', events3d.HumanEvent(self, 'material'))
+        self.callEvent("onChanged", events3d.HumanEvent(self, "material"))
 
     material = property(getMaterial, setMaterial)
 
     def setSkeleton(self, skel):
-        """Change user-selected skeleton.
-        """
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'user-skeleton'))
+        """Change user-selected skeleton."""
+        self.callEvent("onChanging", events3d.HumanEvent(self, "user-skeleton"))
         self.skeleton = skel
         if self.skeleton:
             self.skeleton.dirty = True
-        self.callEvent('onChanged', events3d.HumanEvent(self, 'user-skeleton'))
+        self.callEvent("onChanged", events3d.HumanEvent(self, "user-skeleton"))
 
     def getSkeleton(self):
         """The user-selected skeleton. The skeleton that is shown on the human
         and that will be used for exporting.
         """
         if self.skeleton:
-            if not hasattr(self.skeleton, 'dirty') or self.skeleton.dirty:
+            if not hasattr(self.skeleton, "dirty") or self.skeleton.dirty:
                 # Update joint positions and copy bone orientations (normals) from base skeleton
-                self.skeleton.updateJoints(self.meshData, ref_skel=self.getBaseSkeleton())
+                self.skeleton.updateJoints(
+                    self.meshData, ref_skel=self.getBaseSkeleton()
+                )
                 self.skeleton.dirty = False
         return self.skeleton
 
@@ -1357,20 +1448,22 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         """Set the reference skeleton, used for poses and weighting vertices.
         Generally this skeleton is initialized once and does not change.
         """
-        self.callEvent('onChanging', events3d.HumanEvent(self, 'skeleton'))
+        self.callEvent("onChanging", events3d.HumanEvent(self, "skeleton"))
         animation.AnimatedMesh.setBaseSkeleton(self, skel)
         self.updateVertexWeights(skel.getVertexWeights() if skel else None)
-        self.callEvent('onChanged', events3d.HumanEvent(self, 'skeleton'))
+        self.callEvent("onChanged", events3d.HumanEvent(self, "skeleton"))
         self.refreshPose()
 
     def updateVertexWeights(self, vertexWeights):
         for mName in self.getBoundMeshes():  # Meshes are unsubdivided
             # TODO perhaps this identity by name is not strong enough, or enforce unique names in AnimatedMesh
-            if vertexWeights is None: 
+            if vertexWeights is None:
                 animation.AnimatedMesh.updateVertexWeights(self, mName, vertexWeights)
             else:
                 # Update proxy mesh weights
-                self._updateMeshVertexWeights(self.getBoundMesh(mName)[0], vertexWeights)
+                self._updateMeshVertexWeights(
+                    self.getBoundMesh(mName)[0], vertexWeights
+                )
 
     def resetBoundMeshes(self):
         """
@@ -1409,7 +1502,6 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         else:
             animation.AnimatedMesh.updateVertexWeights(self, mesh.name, weights)
 
-
     def getVertexWeights(self, skel=None):
         """Get vertex weights for human body. Optionally remap them to fit a
         user-selected skeleton. If no skel argument is provided, the weights
@@ -1426,27 +1518,27 @@ class Human(guicommon.Object, animation.AnimatedMesh):
         return bodyWeights
 
     def setPosed(self, posed):
-        event = events3d.HumanEvent(self, 'poseState')
+        event = events3d.HumanEvent(self, "poseState")
         event.state = posed
-        self.callEvent('onChanging', event)
+        self.callEvent("onChanging", event)
         if self.skeleton:
             self.skeleton.dirty = True
         animation.AnimatedMesh.setPosed(self, posed)
-        self.callEvent('onChanged', event)
+        self.callEvent("onChanged", event)
 
     def setActiveAnimation(self, anim_name):
-        event = events3d.HumanEvent(self, 'poseChange')
+        event = events3d.HumanEvent(self, "poseChange")
         event.pose = anim_name
-        self.callEvent('onChanging', event)
+        self.callEvent("onChanging", event)
         if self.skeleton:
             self.skeleton.dirty = True
         super(Human, self).setActiveAnimation(anim_name)
-        self.callEvent('onChanged', event)
+        self.callEvent("onChanged", event)
 
     def refreshPose(self, updateIfInRest=False):
         # TODO investigate why at startup this is called so often
-        event = events3d.HumanEvent(self, 'poseRefresh')
-        self.callEvent('onChanging', event)
+        event = events3d.HumanEvent(self, "poseRefresh")
+        self.callEvent("onChanging", event)
         if self.skeleton:
             self.skeleton.dirty = True
         super(Human, self).refreshPose(updateIfInRest)
@@ -1454,16 +1546,19 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             self.updateSubdivisionMesh()
             self.mesh.calcNormals()
             self.mesh.update()
-        self.callEvent('onChanged', event)
+        self.callEvent("onChanged", event)
 
     def load(self, filename, update=True, strict=False):
 
-        def _compare_versions(mhmVersion,pgmVersion):
-            """ Return true if major+minor matches, false if they do not. Ignore patch number. """
+        def _compare_versions(mhmVersion, pgmVersion):
+            """Return true if major+minor matches, false if they do not. Ignore patch number."""
             import re
-            match1 = re.match("v(\d)\.(\d)",mhmVersion)
-            match2 = re.match("v(\d)\.(\d)",pgmVersion)
-            return match1.groups(1) == match2.groups(1) and match1.groups(2) == match2.groups(2)
+
+            match1 = re.match("v(\d)\.(\d)", mhmVersion)
+            match2 = re.match("v(\d)\.(\d)", pgmVersion)
+            return match1.groups(1) == match2.groups(1) and match1.groups(
+                2
+            ) == match2.groups(2)
 
         def _get_version(lineData):
             try:
@@ -1471,7 +1566,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
                     if not l:
                         continue
                     l = l.split()
-                    if l[0] == 'version':
+                    if l[0] == "version":
                         return l[1]
             except:
                 return None
@@ -1479,26 +1574,28 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
         log.message("Loading human from MHM file %s.", filename)
         progress = Progress()(0.0, 0.8)
-        event = events3d.HumanEvent(self, 'load')
+        event = events3d.HumanEvent(self, "load")
         event.path = filename
-        self.callEvent('onChanging', event)
+        self.callEvent("onChanging", event)
 
         self.resetMeshValues()
         self.blockEthnicUpdates = True
 
         subdivide = False
 
-        with open(filename, 'r', encoding="utf-8") as f:
+        with open(filename, "r", encoding="utf-8") as f:
 
             for lh in list(G.app.loadHandlers.values()):
                 try:
-                    lh(self, ['status', 'started'], strict)
+                    lh(self, ["status", "started"], strict)
                 except:
                     if strict:
                         e = sys.exc_info()
                         raise e[0](e[1]).with_traceback(e[2])
                     else:
-                        log.warning("Exception while starting MHM loading.", exc_info=True)
+                        log.warning(
+                            "Exception while starting MHM loading.", exc_info=True
+                        )
 
             lines = f.readlines()
 
@@ -1510,46 +1607,62 @@ class Human(guicommon.Object, animation.AnimatedMesh):
                         e = sys.exc_info()
                         raise e[0](e[1]).with_traceback(e[2])
                     else:
-                        log.warning("Exception while loading MHM property.", exc_info=True)
+                        log.warning(
+                            "Exception while loading MHM property.", exc_info=True
+                        )
 
             def _do_load_property(lineData):
-                if len(lineData) > 0 and not lineData[0] == '#':
-                    if lineData[0] == 'version':
-                        log.message('Version %s', lineData[1])
-                    elif lineData[0] == 'uuid' and len(lineData) > 1:
+                if len(lineData) > 0 and not lineData[0] == "#":
+                    if lineData[0] == "version":
+                        log.message("Version %s", lineData[1])
+                    elif lineData[0] == "uuid" and len(lineData) > 1:
                         self.setUuid(lineData[1])
-                    elif lineData[0] == 'name' and len(lineData) > 1:
-                        self.setName(' '.join(lineData[1:]))
-                        log.debug('Model Name %s' % self.getName())
-                    elif lineData[0] == 'tags' and len(lineData) > 1:
-                        for tag in ' '.join(lineData[1:]).split(';'):
+                    elif lineData[0] == "name" and len(lineData) > 1:
+                        self.setName(" ".join(lineData[1:]))
+                        log.debug("Model Name %s" % self.getName())
+                    elif lineData[0] == "tags" and len(lineData) > 1:
+                        for tag in " ".join(lineData[1:]).split(";"):
                             self.addTag(tag)
-                    elif lineData[0] == 'modifier':
+                    elif lineData[0] == "modifier":
                         try:
-                            self.getModifier(lineData[1]).setValue(float(lineData[2]), skipDependencies=True)
+                            self.getModifier(lineData[1]).setValue(
+                                float(lineData[2]), skipDependencies=True
+                            )
                         except KeyError:
-                            log.warning('Unknown modifier specified in MHM file: %s', lineData[1])
-                    elif lineData[0] == 'camera':
+                            log.warning(
+                                "Unknown modifier specified in MHM file: %s",
+                                lineData[1],
+                            )
+                    elif lineData[0] == "camera":
                         rot = list(map(float, lineData[1:3])) + [0.0]
                         trans = list(map(float, lineData[3:6]))
                         zoom = float(lineData[6])
                         G.app.modelCamera.setRotation(rot)
                         G.app.modelCamera.translation[:3] = trans[:3]
                         G.app.modelCamera.setZoomFactor(zoom)
-                    elif lineData[0] == 'subdivide':
-                        G.app.selectedHuman._mhm_do_subdivide = lineData[1].lower() in ['true', 'yes']
+                    elif lineData[0] == "subdivide":
+                        G.app.selectedHuman._mhm_do_subdivide = lineData[1].lower() in [
+                            "true",
+                            "yes",
+                        ]
                     elif lineData[0] in G.app.loadHandlers:
                         G.app.loadHandlers[lineData[0]](self, lineData, strict)
                     else:
                         if strict:
-                            raise RuntimeError('Unknown property in MHM file: %s' % (lineData, ))
+                            raise RuntimeError(
+                                "Unknown property in MHM file: %s" % (lineData,)
+                            )
                         else:
-                            log.warning('Unknown property in MHM file: %s', lineData)
+                            log.warning("Unknown property in MHM file: %s", lineData)
 
             version = _get_version(lines)
             if not _compare_versions(version, getShortVersion(noSub=True)):
-                log.message("MHM file is of version %s, attempting to load with backward compatibility" % version)
+                log.message(
+                    "MHM file is of version %s, attempting to load with backward compatibility"
+                    % version
+                )
                 import compat
+
                 compat.loadMHM(version, lines, _load_property, strict)
             else:
                 fprog = Progress(len(lines))
@@ -1561,25 +1674,27 @@ class Human(guicommon.Object, animation.AnimatedMesh):
             log.debug("Finalizing MHM loading.")
             for lh in set(G.app.loadHandlers.values()):
                 try:
-                    lh(self, ['status', 'finished'], strict)
+                    lh(self, ["status", "finished"], strict)
                 except:
                     if strict:
                         e = sys.exc_info()
                         raise e[0](e[1]).with_traceback(e[2])
                     else:
-                        log.warning("Exception while finishing MHM loading.", exc_info=True)
+                        log.warning(
+                            "Exception while finishing MHM loading.", exc_info=True
+                        )
 
         self.blockEthnicUpdates = False
         self._setEthnicVals()
 
-        self.callEvent('onChanged', event)
+        self.callEvent("onChanged", event)
 
         if update:
             progress(0.8, 0.9)
             self.applyAllTargets()
 
         progress(0.9, 0.99)
-        if hasattr(self, '_mhm_do_subdivide'):
+        if hasattr(self, "_mhm_do_subdivide"):
             subdivide = self._mhm_do_subdivide
             del self._mhm_do_subdivide
         self.setSubdivided(subdivide)
@@ -1589,28 +1704,33 @@ class Human(guicommon.Object, animation.AnimatedMesh):
 
     def save(self, filename):
         from progress import Progress
+
         progress = Progress(len(G.app.saveHandlers))
-        event = events3d.HumanEvent(self, 'save')
+        event = events3d.HumanEvent(self, "save")
         event.path = filename
-        self.callEvent('onChanging', event)
+        self.callEvent("onChanging", event)
 
         with open(filename, "w", encoding="utf-8") as f:
-            f.write('# Written by MakeHuman %s\n' % getVersionStr())
-            f.write('version %s\n' % getShortVersion(noSub=True))
+            f.write("# Written by MakeHuman %s\n" % getVersionStr())
+            f.write("version %s\n" % getShortVersion(noSub=True))
             if self.getUuid():
-                f.write('uuid %s\n' % self.getUuid())
+                f.write("uuid %s\n" % self.getUuid())
             if self.getName():
-                f.write('name %s\n' % self.getName())
+                f.write("name %s\n" % self.getName())
             if self.getTags():
-                f.write('tags %s\n' % ';'.join(sorted(self.getTags())))
+                f.write("tags %s\n" % ";".join(sorted(self.getTags())))
             cam_rot = list(G.app.modelCamera.getRotation()[:2])
             cam_trans = list(G.app.modelCamera.translation[:3])
             cam_zoom = [G.app.modelCamera.zoomFactor]
-            f.write('camera %s %s %s %s %s %s\n' % tuple(cam_rot + cam_trans + cam_zoom))
+            f.write(
+                "camera %s %s %s %s %s %s\n" % tuple(cam_rot + cam_trans + cam_zoom)
+            )
 
             for modifier in self.modifiers:
                 if modifier.getValue() or modifier.isMacro():
-                    f.write('modifier %s %f\n' % (modifier.fullName, modifier.getValue()))
+                    f.write(
+                        "modifier %s %f\n" % (modifier.fullName, modifier.getValue())
+                    )
 
             class SaveWriter(object):
                 def __init__(self, file_obj):
@@ -1619,13 +1739,13 @@ class Human(guicommon.Object, animation.AnimatedMesh):
                 def write(self, text):
                     # Ensure that handlers write lines ending with newline character
                     if not text.endswith("\n"):
-                        text = text+"\n"
+                        text = text + "\n"
                     self.f.write(text)
 
                 def writelines(self, text):
                     # Ensure that handlers write lines ending with newline character
                     if not text.endswith("\n"):
-                        text = text+"\n"
+                        text = text + "\n"
                     self.f.writelines(text)
 
                 def __getattr__(self, attr):
@@ -1637,7 +1757,7 @@ class Human(guicommon.Object, animation.AnimatedMesh):
                 handler(self, f)
                 progress.step()
 
-            f.write('subdivide %s' % self.isSubdivided())
+            f.write("subdivide %s" % self.isSubdivided())
 
         progress(1)
-        self.callEvent('onChanged', event)
+        self.callEvent("onChanged", event)
