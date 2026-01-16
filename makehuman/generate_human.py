@@ -334,6 +334,262 @@ def configure_human(
     print("\nHuman configuration complete!")
 
 
+def configure_human_exact(
+    human,
+    height_cm,
+    upper_arm_cm,
+    lower_arm_cm,
+    upper_leg_cm,
+    lower_leg_cm,
+    tolerance=0.5,
+    max_outer_iterations=10,
+):
+    """
+    Configure the human with EXACT measurements including total height in cm.
+
+    This uses an iterative multi-constraint optimization approach:
+    1. Adjust height modifier to approximate target height
+    2. Adjust individual limb lengths
+    3. Re-check total height and iterate until all constraints are satisfied
+
+    Args:
+        human: The Human object
+        height_cm: Exact total height in centimeters
+        upper_arm_cm: Upper arm length in cm
+        lower_arm_cm: Lower arm length in cm
+        upper_leg_cm: Upper leg length in cm
+        lower_leg_cm: Lower leg length in cm
+        tolerance: Acceptable error in cm for each measurement
+        max_outer_iterations: Maximum optimization iterations
+
+    Returns:
+        dict with final measurements and errors
+    """
+    ruler = Ruler()
+
+    print(f"\n{'='*60}")
+    print("Configuring human with EXACT measurements:")
+    print(f"  Target height: {height_cm} cm")
+    print(f"  Target upper arm: {upper_arm_cm} cm")
+    print(f"  Target lower arm: {lower_arm_cm} cm")
+    print(f"  Target upper leg: {upper_leg_cm} cm")
+    print(f"  Target lower leg: {lower_leg_cm} cm")
+    print(f"{'='*60}")
+
+    # Define all measurements we want to control
+    measurements = {
+        "height": {
+            "target": height_cm,
+            "get_current": lambda h: h.getHeightCm(),
+            "modifier": "macrodetails-height/Height",
+        },
+        "upper_arm": {
+            "target": upper_arm_cm,
+            "get_current": lambda h: ruler.getMeasure(
+                h, "measure/measure-upperarm-length-decr|incr", "metric"
+            ),
+            "modifier": "measure/measure-upperarm-length-decr|incr",
+        },
+        "lower_arm": {
+            "target": lower_arm_cm,
+            "get_current": lambda h: ruler.getMeasure(
+                h, "measure/measure-lowerarm-length-decr|incr", "metric"
+            ),
+            "modifier": "measure/measure-lowerarm-length-decr|incr",
+        },
+        "upper_leg": {
+            "target": upper_leg_cm,
+            "get_current": lambda h: ruler.getMeasure(
+                h, "measure/measure-upperleg-height-decr|incr", "metric"
+            ),
+            "modifier": "measure/measure-upperleg-height-decr|incr",
+        },
+        "lower_leg": {
+            "target": lower_leg_cm,
+            "get_current": lambda h: ruler.getMeasure(
+                h, "measure/measure-lowerleg-height-decr|incr", "metric"
+            ),
+            "modifier": "measure/measure-lowerleg-height-decr|incr",
+        },
+    }
+
+    def get_all_errors():
+        """Calculate current errors for all measurements."""
+        errors = {}
+        for name, m in measurements.items():
+            current = m["get_current"](human)
+            errors[name] = {
+                "current": current,
+                "target": m["target"],
+                "error": abs(current - m["target"]),
+            }
+        return errors
+
+    def all_within_tolerance(errors):
+        """Check if all measurements are within tolerance."""
+        return all(e["error"] < tolerance for e in errors.values())
+
+    def adjust_height_to_target(target_cm, inner_tolerance=0.3, inner_max_iter=15):
+        """Binary search to find height modifier value for target height in cm."""
+        low, high = 0.0, 1.0
+        best_value = 0.5
+        best_error = float("inf")
+
+        for _ in range(inner_max_iter):
+            mid = (low + high) / 2.0
+            human.setHeight(mid, updateModifier=True)
+
+            current_cm = human.getHeightCm()
+            error = abs(current_cm - target_cm)
+
+            if error < best_error:
+                best_error = error
+                best_value = mid
+
+            if error < inner_tolerance:
+                return mid
+
+            if current_cm < target_cm:
+                low = mid
+            else:
+                high = mid
+
+        human.setHeight(best_value, updateModifier=True)
+        return best_value
+
+    def adjust_limb_quietly(
+        modifier_name, measurement_name, target_cm, inner_max_iter=15
+    ):
+        """Adjust a limb measurement without verbose output."""
+        try:
+            modifier = human.getModifier(modifier_name)
+        except KeyError:
+            return None
+
+        low, high = -1.0, 1.0
+        if modifier.getMin() >= 0:
+            low = 0.0
+
+        best_value = 0.0
+        best_error = float("inf")
+
+        for _ in range(inner_max_iter):
+            mid = (low + high) / 2.0
+            modifier.setValue(mid)
+            human.applyAllTargets()
+
+            current_cm = ruler.getMeasure(human, measurement_name, "metric")
+            error = abs(current_cm - target_cm)
+
+            if error < best_error:
+                best_error = error
+                best_value = mid
+
+            if error < tolerance * 0.5:  # Use tighter tolerance for inner loop
+                return mid
+
+            if current_cm < target_cm:
+                low = mid
+            else:
+                high = mid
+
+        modifier.setValue(best_value)
+        human.applyAllTargets()
+        return best_value
+
+    # Main optimization loop
+    for outer_iter in range(max_outer_iterations):
+        print(
+            f"\n--- Optimization iteration {outer_iter + 1}/{max_outer_iterations} ---"
+        )
+
+        # Step 1: Adjust height first
+        print("  Adjusting height...")
+        adjust_height_to_target(height_cm)
+
+        # Step 2: Adjust limb lengths
+        print("  Adjusting limb lengths...")
+        adjust_limb_quietly(
+            "measure/measure-upperarm-length-decr|incr",
+            "measure/measure-upperarm-length-decr|incr",
+            upper_arm_cm,
+        )
+        adjust_limb_quietly(
+            "measure/measure-lowerarm-length-decr|incr",
+            "measure/measure-lowerarm-length-decr|incr",
+            lower_arm_cm,
+        )
+        adjust_limb_quietly(
+            "measure/measure-upperleg-height-decr|incr",
+            "measure/measure-upperleg-height-decr|incr",
+            upper_leg_cm,
+        )
+        adjust_limb_quietly(
+            "measure/measure-lowerleg-height-decr|incr",
+            "measure/measure-lowerleg-height-decr|incr",
+            lower_leg_cm,
+        )
+
+        # Step 3: Check all errors
+        errors = get_all_errors()
+
+        print("\n  Current measurements:")
+        for name, e in errors.items():
+            status = "✓" if e["error"] < tolerance else "✗"
+            print(
+                f"    {status} {name}: {e['current']:.2f} cm (target: {e['target']:.2f}, error: {e['error']:.2f})"
+            )
+
+        if all_within_tolerance(errors):
+            print(
+                f"\n✓ All measurements within tolerance after {outer_iter + 1} iterations!"
+            )
+            break
+
+        # Step 4: Height may have changed due to limb adjustments - compensate
+        # Calculate how much height we need to add/remove via torso/neck adjustments
+        height_error = errors["height"]["error"]
+        if height_error >= tolerance:
+            print(f"\n  Height drifted - re-adjusting...")
+            # Try to compensate using torso height if available
+            try:
+                torso_modifier = human.getModifier("torso/torso-scale-vert-decr|incr")
+                current_height = human.getHeightCm()
+                height_diff = height_cm - current_height
+
+                # Estimate torso adjustment needed (rough approximation)
+                if abs(height_diff) > tolerance:
+                    # Adjust torso to compensate
+                    current_torso = torso_modifier.getValue()
+                    # Small adjustment in the direction needed
+                    adjustment = 0.1 if height_diff > 0 else -0.1
+                    new_torso = max(-1.0, min(1.0, current_torso + adjustment))
+                    torso_modifier.setValue(new_torso)
+                    human.applyAllTargets()
+            except KeyError:
+                # No torso modifier available, will rely on height re-adjustment
+                pass
+    else:
+        print(f"\n⚠ Max iterations reached. Some measurements may not be exact.")
+
+    # Final report
+    final_errors = get_all_errors()
+    print(f"\n{'='*60}")
+    print("FINAL MEASUREMENTS:")
+    print(f"{'='*60}")
+    total_error = 0
+    for name, e in final_errors.items():
+        status = "✓" if e["error"] < tolerance else "✗"
+        print(
+            f"  {status} {name}: {e['current']:.2f} cm (target: {e['target']:.2f}, error: {e['error']:.2f})"
+        )
+        total_error += e["error"]
+    print(f"\n  Total error: {total_error:.2f} cm")
+    print(f"{'='*60}")
+
+    return final_errors
+
+
 def load_rig(human, rig_path):
     """Load and apply a rig to the human."""
     if not os.path.exists(rig_path):
@@ -479,7 +735,7 @@ def parse_arguments():
         epilog="""
 Example:
     python generate_human.py \\
-        --height 0.8 \\
+        --height 175.0 \\
         --upper-arm 30.5 \\
         --lower-arm 25.0 \\
         --upper-leg 45.0 \\
@@ -490,7 +746,10 @@ Example:
     )
 
     parser.add_argument(
-        "--height", type=float, required=True, help="Height as a value between 0 and 1"
+        "--height",
+        type=float,
+        required=True,
+        help="Height in centimeters (uses iterative optimization)",
     )
     parser.add_argument(
         "--upper-arm", type=float, required=True, help="Upper arm length in centimeters"
@@ -519,12 +778,18 @@ Example:
         required=False,
         help="Optional: Save the model as .mhm file for debugging or manual export",
     )
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        default=0.5,
+        help="Acceptable error tolerance in cm for exact measurements (default: 0.5)",
+    )
 
     args = parser.parse_args()
 
     # Validate height
-    if not 0.0 <= args.height <= 1.0:
-        parser.error("Height must be between 0 and 1")
+    if not 100.0 <= args.height <= 220.0:
+        parser.error("Height should be between 100 and 220 cm")
 
     # Validate measurements (reasonable ranges)
     if not 10.0 <= args.upper_arm <= 50.0:
@@ -560,14 +825,15 @@ def main():
     human = create_human(mesh)
     app.selectedHuman = human
 
-    # Configure measurements
-    configure_human(
+    # Configure measurements with exact values using iterative optimization
+    configure_human_exact(
         human,
         args.height,
         args.upper_arm,
         args.lower_arm,
         args.upper_leg,
         args.lower_leg,
+        tolerance=args.tolerance,
     )
 
     # Load rig
