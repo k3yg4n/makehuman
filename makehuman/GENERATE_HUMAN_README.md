@@ -16,12 +16,13 @@ All measurements are specified in **centimeters**. The script uses **iterative m
 
 ```bash
 python3 generate_human.py \
-    --height 175.0 \
-    --upper-arm 30.5 \
+    --height 169.0 \
+    --upper-arm 29.0 \
     --lower-arm 25.0 \
-    --upper-leg 45.0 \
-    --lower-leg 40.0 \
-    --rig-path "/path/to/unity.mhskel" \
+    --upper-leg 38.5 \
+    --lower-leg 48.0 \
+    --rig-path "/Users/keeganliu/Documents/MakeHuman/v1py3/data/rigs/Unity_Rig/unity.mhskel" \
+    --clothes "male_casualsuit01" \
     --output "./tmp/output.fbx" \
     --save-mhm "./tmp/generate_human_model.mhm" \
     --tolerance 0.3
@@ -37,12 +38,69 @@ python3 generate_human.py \
 - `--upper-leg`: Upper leg length in centimeters
 - `--lower-leg`: Lower leg length in centimeters
 
+**Clothing:**
+
+- `--clothes`: (Optional) Name or path of clothes to add to the model
+
 **Output Options:**
 
 - `--rig-path`: Path to the Unity rig file (.mhskel)
 - `--output`: Output path for the FBX file
 - `--save-mhm`: (Optional) Save the model as .mhm file for debugging or manual export
 - `--tolerance`: (Optional) Acceptable error in cm for measurements (default: 0.5)
+
+## Clothes
+
+You can add clothes to your generated model using the `--clothes` parameter.
+
+### Available Built-in Clothes
+
+| Category     | Options                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| Female suits | `female_elegantsuit01`, `female_casualsuit01`, `female_casualsuit02`, `female_sportsuit01` |
+| Male suits   | `male_casualsuit01` through `male_casualsuit06`, `male_elegantsuit01`, `male_worksuit01`   |
+| Shoes        | `shoes01` through `shoes06`                                                                |
+| Accessories  | `fedora01`                                                                                 |
+
+### Specifying Clothes
+
+You can specify clothes in several ways:
+
+1. **Just the name** (recommended):
+
+   ```bash
+   --clothes female_elegantsuit01
+   ```
+
+   Will automatically look in `data/clothes/<name>/<name>.mhclo`
+
+2. **Full relative path**:
+
+   ```bash
+   --clothes data/clothes/male_casualsuit01/male_casualsuit01.mhclo
+   ```
+
+3. **Absolute path** (for custom clothes):
+   ```bash
+   --clothes /path/to/your/custom_outfit.mhclo
+   ```
+
+### Textures
+
+When clothes are added, their textures are automatically exported:
+
+```
+output/
+├── my_character.fbx           # FBX file with material references
+└── textures/
+    ├── clothes_diffuse.png    # Color/diffuse texture
+    └── clothes_normal.png     # Normal map
+```
+
+The FBX file references textures in the `textures/` subfolder. When importing into Unity:
+
+- Place the `textures/` folder alongside the FBX file
+- Unity should automatically find and apply the textures
 
 ## How Exact Measurements Work
 
@@ -60,7 +118,7 @@ This approach handles the interdependence between measurements:
 - Changing height affects all limb proportions
 - The algorithm iteratively converges on a solution that satisfies all constraints
 
-### Example Output (Exact Mode)
+### Example Output
 
 ```
 ============================================================
@@ -84,18 +142,6 @@ Configuring human with EXACT measurements:
     ✓ lower_leg: 40.02 cm (target: 40.0, error: 0.02)
 
 ✓ All measurements within tolerance after 1 iterations!
-
-============================================================
-FINAL MEASUREMENTS:
-============================================================
-  ✓ height: 175.12 cm (target: 175.0, error: 0.12)
-  ✓ upper_arm: 30.48 cm (target: 30.5, error: 0.02)
-  ✓ lower_arm: 25.03 cm (target: 25.0, error: 0.03)
-  ✓ upper_leg: 44.95 cm (target: 45.0, error: 0.05)
-  ✓ lower_leg: 40.02 cm (target: 40.0, error: 0.02)
-
-  Total error: 0.24 cm
-============================================================
 ```
 
 ## Important Notes
@@ -114,15 +160,9 @@ The measurement modifiers in MakeHuman are designed to **decrease** measurements
 - Upper leg height: ~48 cm
 - Lower leg height: ~65 cm
 
-To achieve specific measurements, you may need to:
-
-1. Start with measurements at or below the defaults
-2. Adjust the height parameter to scale the overall model
-3. Use the measurement modifiers to fine-tune individual limb lengths
-
 ### Unity Rig
 
-You need to provide your own Unity-compatible rig file. The script uses the default MakeHuman rig if you don't have a Unity-specific one, but this may not be optimal for Unity imports.
+You need to provide your own Unity-compatible rig file. The script uses the default MakeHuman rig for vertex weights, but applies your specified rig for export.
 
 To get a Unity rig:
 
@@ -138,39 +178,21 @@ The FBX export is configured with the following Unity-compatible settings:
 - Feet on ground
 - Scale units: meters (0.1x scale from MakeHuman's decimeters)
 - Y-up orientation with Z-forward
+- Materials and textures included
 
-## Known Issues & Solutions
+**What's Exported:**
 
-1. **FBX Export Limitations**: The FBX export may fail in headless mode due to OpenGL/GUI dependencies.
+| Content             | Status           |
+| ------------------- | ---------------- |
+| Human mesh          | ✓                |
+| Skeleton/Rig        | ✓                |
+| Clothes mesh        | ✓ (if specified) |
+| Material properties | ✓                |
+| Diffuse textures    | ✓                |
+| Normal maps         | ✓                |
+| Other texture maps  | ✓ (if present)   |
 
-   **Solution**: The script now automatically saves a .mhm file (when `--save-mhm` is specified) that you can:
-
-   - Load in MakeHuman GUI to verify the model
-   - Export manually to FBX with full Unity settings
-   - Use for further customization
-
-2. **Measurement Convergence**: The iterative algorithm may not converge for measurements outside the modifier range. The script will use the best approximation it can achieve and report the error.
-
-3. **Recommended Workflow**:
-
-   ```bash
-   # Step 1: Generate and configure the model
-   python generate_human.py \
-       --height 175.0 \
-       --upper-arm 32.0 \
-       --lower-arm 26.0 \
-       --upper-leg 44.0 \
-       --lower-leg 60.0 \
-       --rig-path data/rigs/default.mhskel \
-       --save-mhm output/my_character.mhm \
-       --output output/my_character.fbx
-
-   # Step 2: If FBX export fails, load the .mhm file in MakeHuman GUI
-   # File > Load > output/my_character.mhm
-   # Then: File > Export > FBX with your desired settings
-   ```
-
-## Example
+## Complete Example
 
 ```bash
 # Using the venv Python
@@ -179,8 +201,9 @@ The FBX export is configured with the following Unity-compatible settings:
     --upper-arm 32.0 \
     --lower-arm 26.0 \
     --upper-leg 44.0 \
-    --lower-leg 60.0 \
-    --rig-path data/rigs/default.mhskel \
+    --lower-leg 50.0 \
+    --rig-path "/path/to/Unity_Rig/unity.mhskel" \
+    --clothes "male_casualsuit01" \
     --save-mhm output/my_character.mhm \
     --output output/my_character.fbx
 ```
@@ -204,7 +227,7 @@ Configuring human with EXACT measurements:
   Target upper arm: 32.0 cm
   Target lower arm: 26.0 cm
   Target upper leg: 44.0 cm
-  Target lower leg: 60.0 cm
+  Target lower leg: 50.0 cm
 ============================================================
 
 --- Optimization iteration 1/10 ---
@@ -216,18 +239,26 @@ Configuring human with EXACT measurements:
     ✓ upper_arm: 31.98 cm (target: 32.0, error: 0.02)
     ✓ lower_arm: 26.03 cm (target: 26.0, error: 0.03)
     ✓ upper_leg: 43.95 cm (target: 44.0, error: 0.05)
-    ✓ lower_leg: 59.98 cm (target: 60.0, error: 0.02)
+    ✓ lower_leg: 50.02 cm (target: 50.0, error: 0.02)
 
 ✓ All measurements within tolerance after 1 iterations!
 
-Loading rig from data/rigs/default.mhskel...
+Loading rig from /path/to/Unity_Rig/unity.mhskel...
+  Loading default skeleton for vertex weights...
+  Loading user skeleton...
 Rig loaded and applied successfully!
+
+Loading clothes...
+  Loading clothes from data/clothes/male_casualsuit01/male_casualsuit01.mhclo...
+  Clothes 'Male_casualsuit01' loaded successfully!
 
 Saving MHM file to output/my_character.mhm...
 MHM file saved successfully: output/my_character.mhm
 
 Exporting to output/my_character.fbx...
-  [Export status...]
+  Preparing materials for headless export...
+  Preparing meshes and skeleton...
+  Export complete! File saved to: output/my_character.fbx
 
 ============================================================
 Generation complete!
@@ -235,9 +266,24 @@ Generation complete!
 
 Summary:
   Model configured: ✓
+  Height: 175.0
   Rig applied: ✓
+  Clothes loaded: ✓ (male_casualsuit01)
   MHM file saved: ✓ (output/my_character.mhm)
   FBX export: ✓ (output/my_character.fbx)
+```
+
+## Output Files
+
+After running the script, you'll have:
+
+```
+output/
+├── my_character.fbx           # Main FBX file for Unity import
+├── my_character.mhm           # MakeHuman project file (if --save-mhm used)
+└── textures/                  # Texture files
+    ├── male_casualsuit01_diffuse.png
+    └── male_casualsuit01_normal.png
 ```
 
 ## Troubleshooting
@@ -258,9 +304,21 @@ Summary:
 - Try adjusting the height parameter first
 - Check the iteration output to see how close the algorithm got
 
+### Clothes not loading
+
+- Check that the clothes name matches exactly (case-sensitive)
+- Verify the .mhclo file exists in `data/clothes/<name>/<name>.mhclo`
+- For custom clothes, provide the full absolute path
+
+### Textures not appearing in Unity
+
+- Ensure the `textures/` folder is placed alongside the FBX file
+- Check that Unity's material import settings are configured correctly
+- Try re-importing the FBX with "Extract Materials" enabled
+
 ## Future Improvements
 
-- Add support for saving to .mhm format
-- Implement better measurement scaling algorithms
-- Add more body parameters (weight, muscle, etc.)
-- Create a pure Python FBX exporter to avoid GUI dependencies
+- Add support for multiple clothes items simultaneously
+- Add more body parameters (weight, muscle, gender, etc.)
+- Support for custom skin textures
+- Hair and accessory support

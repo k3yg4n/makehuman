@@ -81,6 +81,7 @@ import material
 import skeleton
 import algos3d
 import targets
+import proxy
 import math
 import numpy as np
 
@@ -616,13 +617,83 @@ def load_rig(human, rig_path):
     return user_rig
 
 
-def save_mhm(human, mhm_path):
+def load_clothes(human, clothes_path):
+    """
+    Load and apply clothes to the human model.
+
+    Args:
+        human: The Human object
+        clothes_path: Path to the .mhclo file. Can be:
+                      - Just a name (e.g., 'female_elegantsuit01') - will look in data/clothes/
+                      - A relative path (e.g., 'data/clothes/female_elegantsuit01/female_elegantsuit01.mhclo')
+                      - An absolute path to a .mhclo file
+
+    Returns:
+        The loaded proxy object, or None if loading failed
+    """
+    original_path = clothes_path
+
+    # Resolve the clothes path
+    if not os.path.isabs(clothes_path):
+        # If it's just a name (no path separators and no .mhclo extension)
+        if os.sep not in clothes_path and "/" not in clothes_path:
+            if not clothes_path.endswith(".mhclo"):
+                # Try: data/clothes/<name>/<name>.mhclo
+                clothes_path = getpath.getSysDataPath(
+                    f"clothes/{clothes_path}/{clothes_path}.mhclo"
+                )
+
+        # If still not found and doesn't end with .mhclo, try adding extension
+        if not os.path.exists(clothes_path) and not clothes_path.endswith(".mhclo"):
+            clothes_path = clothes_path + ".mhclo"
+
+        # If still not absolute, try getSysDataPath
+        if not os.path.isabs(clothes_path) and not os.path.exists(clothes_path):
+            clothes_path = getpath.getSysDataPath(clothes_path)
+
+    if not os.path.exists(clothes_path):
+        print(f"  Warning: Clothes file not found: {original_path}")
+        print(f"           Tried: {clothes_path}")
+        return None
+
+    print(f"  Loading clothes from {clothes_path}...")
+
+    try:
+        # Load the proxy (clothes)
+        pxy = proxy.loadProxy(human, clothes_path, type="Clothes")
+        if pxy is None:
+            print(f"  Warning: Failed to load clothes proxy from {clothes_path}")
+            return None
+
+        # Load the mesh and create the object
+        mesh, obj = pxy.loadMeshAndObject(human)
+        if not mesh:
+            print(f"  Warning: Failed to load clothes mesh")
+            return None
+
+        # Add the clothes to the human
+        human.addClothesProxy(pxy)
+
+        print(f"  Clothes '{pxy.name}' loaded successfully!")
+        return pxy
+
+    except Exception as e:
+        print(f"  Warning: Failed to load clothes: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return None
+
+
+def save_mhm(human, mhm_path, skeleton_path=None, clothes_proxies=None):
     """
     Save the human model as .mhm file for debugging or later use.
 
     Args:
         human: The Human object
         mhm_path: Path to save the .mhm file
+        skeleton_path: Path to the skeleton file (for MHM compatibility)
+        clothes_proxies: List of clothes proxy objects
     """
     print(f"\nSaving MHM file to {mhm_path}...")
 
@@ -633,6 +704,23 @@ def save_mhm(human, mhm_path):
 
     try:
         human.save(mhm_path)
+
+        # Append skeleton and clothes info that plugins would normally add
+        # These are not included by human.save() in headless mode
+        with open(mhm_path, "a") as f:
+            # Add skeleton reference
+            if skeleton_path:
+                # Get relative path for better portability
+                skel_name = os.path.basename(skeleton_path)
+                skel_dir = os.path.basename(os.path.dirname(skeleton_path))
+                relative_skel = f"{skel_dir}/{skel_name}" if skel_dir else skel_name
+                f.write(f"skeleton {relative_skel}\n")
+
+            # Add clothes references (format: clothes <name> <uuid>)
+            if clothes_proxies:
+                for pxy in clothes_proxies:
+                    f.write(f"clothes {pxy.name} {pxy.getUuid()}\n")
+
         print(f"MHM file saved successfully: {mhm_path}")
         print("You can load this file in MakeHuman GUI to verify or export manually.")
     except Exception as e:
@@ -686,9 +774,7 @@ def export_fbx(human, output_path, verbose=True):
         class FbxConfig:
             def __init__(self):
                 self.useRelPaths = False
-                self.useMaterials = (
-                    False  # Disable materials in headless mode (requires Qt)
-                )
+                self.useMaterials = True  # Enable materials/textures export
                 self.binary = True
                 self.yUpFaceZ = True
                 self.yUpFaceX = False
@@ -747,8 +833,44 @@ def export_fbx(human, output_path, verbose=True):
             def goodName(self, name):
                 return name.replace(" ", "_").replace("-", "_").lower()
 
+            def copyTextureToNewLocation(self, filepath):
+                """Copy a texture file to the export textures folder."""
+                import shutil
+
+                if not filepath:
+                    return filepath
+
+                if filepath in self._copiedFiles:
+                    return self._copiedFiles[filepath]
+
+                # Get the destination path
+                basename = os.path.basename(filepath)
+                dest_path = os.path.join(self.texFolder, basename)
+
+                # Copy the file if it exists and isn't already there
+                if os.path.isfile(filepath) and not os.path.exists(dest_path):
+                    try:
+                        shutil.copy2(filepath, dest_path)
+                    except Exception as e:
+                        print(f"  Warning: Could not copy texture {filepath}: {e}")
+                        return filepath
+
+                self._copiedFiles[filepath] = dest_path
+                return dest_path
+
         config = FbxConfig()
         config.setHuman(human)
+
+        # Disable autoBlendSkin on all materials to avoid Qt image processing
+        # This is necessary for headless mode
+        if verbose:
+            print("  Preparing materials for headless export...")
+        for obj in human.getObjects():
+            if hasattr(obj, "material") and obj.material:
+                obj.material._autoBlendSkin = False
+        for pxy in human.getProxies():
+            if hasattr(pxy, "material") and pxy.material:
+                pxy.material._autoBlendSkin = False
 
         # Ensure output directory exists
         output_dir = os.path.dirname(output_path)
@@ -790,8 +912,14 @@ Example:
         --lower-arm 25.0 \\
         --upper-leg 45.0 \\
         --lower-leg 40.0 \\
-        --rig-path data/rigs/unity.mhskel \\
+        --rig-path /path/to/unity.mhskel \\
+        --clothes male_casualsuit01 \\
         --output output/human.fbx
+
+Available clothes (in data/clothes/):
+    female_elegantsuit01, female_casualsuit01, female_casualsuit02, female_sportsuit01
+    male_casualsuit01-06, male_elegantsuit01, male_worksuit01
+    shoes01-06, fedora01
         """,
     )
 
@@ -833,6 +961,12 @@ Example:
         type=float,
         default=0.5,
         help="Acceptable error tolerance in cm for exact measurements (default: 0.5)",
+    )
+    parser.add_argument(
+        "--clothes",
+        type=str,
+        required=False,
+        help="Name or path of clothes to add (e.g., 'female_elegantsuit01' or full path to .mhclo file)",
     )
 
     args = parser.parse_args()
@@ -889,10 +1023,25 @@ def main():
     # Load rig
     load_rig(human, args.rig_path)
 
+    # Load clothes if specified
+    clothes_loaded = False
+    loaded_clothes_proxies = []
+    if args.clothes:
+        print(f"\nLoading clothes...")
+        pxy = load_clothes(human, args.clothes)
+        clothes_loaded = pxy is not None
+        if pxy:
+            loaded_clothes_proxies.append(pxy)
+
     # Save MHM file if requested (do this before FBX export for debugging)
     mhm_saved = False
     if args.save_mhm:
-        save_mhm(human, args.save_mhm)
+        save_mhm(
+            human,
+            args.save_mhm,
+            skeleton_path=args.rig_path,
+            clothes_proxies=loaded_clothes_proxies if loaded_clothes_proxies else None,
+        )
         mhm_saved = True
 
     # Export to FBX
@@ -907,6 +1056,11 @@ def main():
     print(f"  Model configured: ✓")
     print(f"  Height: {args.height}")
     print(f"  Rig applied: ✓")
+    if args.clothes:
+        if clothes_loaded:
+            print(f"  Clothes loaded: ✓ ({args.clothes})")
+        else:
+            print(f"  Clothes loaded: ✗ (failed)")
     if mhm_saved:
         print(f"  MHM file saved: ✓ ({args.save_mhm})")
     if fbx_success:
