@@ -1052,7 +1052,13 @@ Example:
         --lower-leg 40.0 \\
         --rig-path /path/to/unity.mhskel \\
         --clothes male_casualsuit01 \\
-        --output output/human.fbx
+        --output-dir ./output \\
+        --mhm-dir ./tmp
+
+    This will create:
+        ./output/male_casualsuit01.fbx
+        ./output/textures/...
+        ./tmp/male_casualsuit01.mhm
 
 Available clothes (in data/clothes/):
     female_elegantsuit01, female_casualsuit01, female_casualsuit02, female_sportsuit01
@@ -1086,13 +1092,16 @@ Available clothes (in data/clothes/):
         help="Path to the Unity rig file (.mhskel)",
     )
     parser.add_argument(
-        "--output", type=str, required=True, help="Output path for the FBX file"
+        "--output-dir",
+        type=str,
+        required=True,
+        help="Output directory for the FBX file (filename will be based on clothes name)",
     )
     parser.add_argument(
-        "--save-mhm",
+        "--mhm-dir",
         type=str,
         required=False,
-        help="Optional: Save the model as .mhm file for debugging or manual export",
+        help="Optional: Directory to save the .mhm file (filename will be based on clothes name)",
     )
     parser.add_argument(
         "--tolerance",
@@ -1103,8 +1112,8 @@ Available clothes (in data/clothes/):
     parser.add_argument(
         "--clothes",
         type=str,
-        required=False,
-        help="Name or path of clothes to add (e.g., 'female_elegantsuit01' or full path to .mhclo file)",
+        required=True,
+        help="Name or path of clothes to add (e.g., 'female_elegantsuit01' or full path to .mhclo file). Used for output filename.",
     )
     parser.add_argument(
         "--pose",
@@ -1198,12 +1207,30 @@ def main():
         anim = load_pose(human, pose_path_used)
         pose_loaded = anim is not None
 
+    # Determine output filenames based on clothes name
+    # Extract the clothes name (without path or extension)
+    clothes_name = os.path.basename(args.clothes)
+    if clothes_name.endswith(".mhclo"):
+        clothes_name = clothes_name[:-6]
+
+    # Ensure output directories exist
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+
+    # Build output paths
+    fbx_output_path = os.path.join(args.output_dir, f"{clothes_name}.fbx")
+    mhm_output_path = None
+    if args.mhm_dir:
+        if not os.path.exists(args.mhm_dir):
+            os.makedirs(args.mhm_dir)
+        mhm_output_path = os.path.join(args.mhm_dir, f"{clothes_name}.mhm")
+
     # Save MHM file if requested (do this before FBX export for debugging)
     mhm_saved = False
-    if args.save_mhm:
+    if mhm_output_path:
         save_mhm(
             human,
-            args.save_mhm,
+            mhm_output_path,
             skeleton_path=args.rig_path,
             clothes_proxies=loaded_clothes_proxies if loaded_clothes_proxies else None,
             pose_path=pose_path_used if pose_loaded else None,
@@ -1211,7 +1238,7 @@ def main():
         mhm_saved = True
 
     # Export to FBX
-    fbx_success = export_fbx(human, args.output)
+    fbx_success = export_fbx(human, fbx_output_path)
 
     print("\n" + "=" * 60)
     print("Generation complete!")
@@ -1235,13 +1262,13 @@ def main():
     else:
         print(f"  Pose: rest pose (no pose applied)")
     if mhm_saved:
-        print(f"  MHM file saved: ✓ ({args.save_mhm})")
+        print(f"  MHM file saved: ✓ ({mhm_output_path})")
     if fbx_success:
-        print(f"  FBX export: ✓ ({args.output})")
+        print(f"  FBX export: ✓ ({fbx_output_path})")
     else:
         print(f"  FBX export: ✗ (failed - use .mhm file for manual export)")
         if not mhm_saved:
-            print("\n  Recommendation: Run again with --save-mhm to save the model,")
+            print("\n  Recommendation: Run again with --mhm-dir to save the model,")
             print("  then use MakeHuman GUI to load the .mhm and export to FBX.")
 
 
