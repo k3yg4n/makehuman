@@ -82,6 +82,8 @@ import skeleton
 import algos3d
 import targets
 import proxy
+import bvh
+import animation
 import math
 import numpy as np
 
@@ -685,7 +687,95 @@ def load_clothes(human, clothes_path):
         return None
 
 
-def save_mhm(human, mhm_path, skeleton_path=None, clothes_proxies=None):
+def load_pose(human, pose_path):
+    """
+    Load and apply a pose (BVH or MHP file) to the human.
+
+    Args:
+        human: The Human object with skeleton attached.
+        pose_path: Path to the pose file (e.g., tpose.bvh).
+
+    Returns:
+        The loaded animation object, or None if loading failed.
+    """
+    if not os.path.exists(pose_path):
+        print(f"  Warning: Pose file not found: {pose_path}")
+        return None
+
+    print(f"\nLoading pose from {pose_path}...")
+
+    try:
+        ext = os.path.splitext(pose_path)[1].lower()
+
+        if ext == ".bvh":
+            # Load BVH file
+            bvh_file = bvh.load(pose_path, convertFromZUp="auto")
+
+            # Create animation track from BVH
+            base_skel = human.getBaseSkeleton()
+            if base_skel is None:
+                print("  Warning: No base skeleton set, cannot load pose.")
+                return None
+
+            anim = bvh_file.createAnimationTrack(base_skel)
+
+            # Auto-scale the animation to match the human's proportions
+            # Compare using the upper leg bone
+            compare_bone = "upperleg01.L"
+            if compare_bone in bvh_file.joints and base_skel.getBone(compare_bone):
+                import numpy.linalg as la
+
+                bvh_joint = bvh_file.joints[compare_bone]
+                bvh_bone_length = la.norm(
+                    bvh_joint.children[0].position - bvh_joint.position
+                )
+
+                bone = base_skel.getBone(compare_bone)
+                scale_factor = float(bone.length) / bvh_bone_length
+
+                # Get root translation and scale it
+                if "root" in bvh_file.joints:
+                    posedata = anim.getAtFramePos(0, noBake=True)
+                    root_bone_idx = 0
+                    bvh_root_translation = posedata[root_bone_idx, :3, 3].copy()
+                    trans = scale_factor * bvh_root_translation
+                    posedata[root_bone_idx, :3, 3] = trans
+                    anim.resetBaked()
+
+        elif ext == ".mhp":
+            # Load MHP file
+            base_skel = human.getBaseSkeleton()
+            if base_skel is None:
+                print("  Warning: No base skeleton set, cannot load pose.")
+                return None
+
+            anim = animation.loadPoseFromMhpFile(pose_path, base_skel)
+        else:
+            print(f"  Warning: Unknown pose file format: {ext}")
+            return None
+
+        if anim is None:
+            print("  Warning: Failed to create animation from pose file.")
+            return None
+
+        # Apply the pose to the human
+        human.addAnimation(anim)
+        human.setActiveAnimation(anim.name)
+        human.setToFrame(0, update=False)
+        human.setPosed(True)
+
+        print(f"  Pose '{anim.name}' loaded and applied successfully!")
+        return anim
+
+    except Exception as e:
+        print(f"  Warning: Failed to load pose: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return None
+
+
+def save_mhm(human, mhm_path, skeleton_path=None, clothes_proxies=None, pose_path=None):
     """
     Save the human model as .mhm file for debugging or later use.
 
@@ -694,6 +784,7 @@ def save_mhm(human, mhm_path, skeleton_path=None, clothes_proxies=None):
         mhm_path: Path to save the .mhm file
         skeleton_path: Path to the skeleton file (for MHM compatibility)
         clothes_proxies: List of clothes proxy objects
+        pose_path: Path to the pose file (e.g., tpose.bvh)
     """
     print(f"\nSaving MHM file to {mhm_path}...")
 
@@ -705,7 +796,7 @@ def save_mhm(human, mhm_path, skeleton_path=None, clothes_proxies=None):
     try:
         human.save(mhm_path)
 
-        # Append skeleton and clothes info that plugins would normally add
+        # Append skeleton, clothes, and pose info that plugins would normally add
         # These are not included by human.save() in headless mode
         with open(mhm_path, "a") as f:
             # Add skeleton reference
@@ -720,6 +811,12 @@ def save_mhm(human, mhm_path, skeleton_path=None, clothes_proxies=None):
             if clothes_proxies:
                 for pxy in clothes_proxies:
                     f.write(f"clothes {pxy.name} {pxy.getUuid()}\n")
+
+            # Add pose reference
+            if pose_path:
+                # Get relative path for better portability
+                pose_name = os.path.basename(pose_path)
+                f.write(f"pose {pose_name}\n")
 
         print(f"MHM file saved successfully: {mhm_path}")
         print("You can load this file in MakeHuman GUI to verify or export manually.")
@@ -968,6 +1065,12 @@ Available clothes (in data/clothes/):
         required=False,
         help="Name or path of clothes to add (e.g., 'female_elegantsuit01' or full path to .mhclo file)",
     )
+    parser.add_argument(
+        "--pose",
+        type=str,
+        default="tpose",
+        help="Pose to apply: 'tpose' for T-pose (default), 'none' for rest pose, or path to .bvh/.mhp file",
+    )
 
     args = parser.parse_args()
 
@@ -1033,6 +1136,25 @@ def main():
         if pxy:
             loaded_clothes_proxies.append(pxy)
 
+    # Load pose (default is T-pose)
+    pose_loaded = False
+    pose_path_used = None
+    if args.pose and args.pose.lower() != "none":
+        if args.pose.lower() == "tpose":
+            # Use the built-in T-pose file
+            pose_path_used = getpath.getSysDataPath("poses/tpose.bvh")
+        else:
+            # User-specified pose file
+            pose_path_used = args.pose
+            if not os.path.exists(pose_path_used):
+                # Try to find it in the poses directory
+                alt_path = getpath.getSysDataPath(f"poses/{pose_path_used}")
+                if os.path.exists(alt_path):
+                    pose_path_used = alt_path
+
+        anim = load_pose(human, pose_path_used)
+        pose_loaded = anim is not None
+
     # Save MHM file if requested (do this before FBX export for debugging)
     mhm_saved = False
     if args.save_mhm:
@@ -1041,6 +1163,7 @@ def main():
             args.save_mhm,
             skeleton_path=args.rig_path,
             clothes_proxies=loaded_clothes_proxies if loaded_clothes_proxies else None,
+            pose_path=pose_path_used if pose_loaded else None,
         )
         mhm_saved = True
 
@@ -1061,6 +1184,13 @@ def main():
             print(f"  Clothes loaded: ✓ ({args.clothes})")
         else:
             print(f"  Clothes loaded: ✗ (failed)")
+    if args.pose and args.pose.lower() != "none":
+        if pose_loaded:
+            print(f"  Pose applied: ✓ ({args.pose})")
+        else:
+            print(f"  Pose applied: ✗ (failed)")
+    else:
+        print(f"  Pose: rest pose (no pose applied)")
     if mhm_saved:
         print(f"  MHM file saved: ✓ ({args.save_mhm})")
     if fbx_success:
