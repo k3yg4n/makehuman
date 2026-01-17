@@ -673,6 +673,13 @@ def load_clothes(human, clothes_path):
             print(f"  Warning: Failed to load clothes mesh")
             return None
 
+        # IMPORTANT: Adapt the proxy mesh to the human's current shape
+        # This fits the clothes to the human's modified dimensions
+        # The GUI does this in adaptProxyToHuman() after loading
+        seed_mesh = obj.getSeedMesh()
+        pxy.update(seed_mesh, fit_to_posed=False)  # Fit to rest pose shape
+        seed_mesh.update()
+
         # Add the clothes to the human
         human.addClothesProxy(pxy)
 
@@ -685,6 +692,40 @@ def load_clothes(human, clothes_path):
 
         traceback.print_exc()
         return None
+
+
+def apply_face_hiding(human):
+    """
+    Apply face masking to hide body vertices under clothes.
+    This prevents the body from clipping through clothing.
+
+    This replicates the "Hide faces under clothes" functionality from the GUI.
+    """
+    clothes_proxies = human.clothesProxies
+    if not clothes_proxies:
+        return
+
+    print("  Applying face hiding for clothes...")
+
+    # Create a vertex mask - start with all vertices visible
+    vertsMask = np.ones(human.meshData.getVertexCount(), dtype=bool)
+
+    # Sort clothes by z_depth (render order)
+    sorted_proxies = sorted(
+        clothes_proxies.values(), key=lambda p: p.z_depth, reverse=True
+    )
+
+    for pxy in sorted_proxies:
+        # Check if this proxy defines vertices to delete (hide)
+        if pxy.deleteVerts is not None and len(pxy.deleteVerts) > 0:
+            # Get the vertices that should be hidden
+            verts_to_hide = np.argwhere(pxy.deleteVerts)[..., 0]
+            vertsMask[verts_to_hide] = False
+            print(f"    Hiding {len(verts_to_hide)} vertices under '{pxy.name}'")
+
+    # Apply the mask to the human mesh
+    human.changeVertexMask(vertsMask)
+    print("  Face hiding applied successfully!")
 
 
 def load_pose(human, pose_path):
@@ -1135,6 +1176,8 @@ def main():
         clothes_loaded = pxy is not None
         if pxy:
             loaded_clothes_proxies.append(pxy)
+            # Apply face hiding to prevent body clipping through clothes
+            apply_face_hiding(human)
 
     # Load pose (default is T-pose)
     pose_loaded = False
