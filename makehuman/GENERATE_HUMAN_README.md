@@ -23,10 +23,16 @@ python3 generate_human.py \
     --lower-leg 48.0 \
     --rig-path "/Users/keeganliu/Documents/MakeHuman/v1py3/data/rigs/Unity_Rig/unity.mhskel" \
     --clothes "male_casualsuit01" \
-    --output "./tmp/output.fbx" \
-    --save-mhm "./tmp/generate_human_model.mhm" \
+    --output-dir "./output" \
+    --mhm-dir "./tmp" \
     --tolerance 0.3
 ```
+
+This will create:
+
+- `./output/male_casualsuit01.fbx` - The FBX model file
+- `./output/textures/` - Texture files for the model
+- `./tmp/male_casualsuit01.mhm` - MakeHuman project file (optional)
 
 ### Parameters
 
@@ -38,20 +44,27 @@ python3 generate_human.py \
 - `--upper-leg`: Upper leg length in centimeters
 - `--lower-leg`: Lower leg length in centimeters
 
-**Clothing:**
+**Clothing (Required):**
 
-- `--clothes`: (Optional) Name or path of clothes to add to the model
+- `--clothes`: Name or path of clothes to add to the model. The output filename is derived from this.
+
+**Pose:**
+
+- `--pose`: Pose to apply (default: `tpose`). Options:
+  - `tpose` - T-pose (default, recommended for Unity)
+  - `none` - Rest pose
+  - Path to a `.bvh` or `.mhp` pose file
 
 **Output Options:**
 
 - `--rig-path`: Path to the Unity rig file (.mhskel)
-- `--output`: Output path for the FBX file
-- `--save-mhm`: (Optional) Save the model as .mhm file for debugging or manual export
-- `--tolerance`: (Optional) Acceptable error in cm for measurements (default: 0.5)
+- `--output-dir`: Directory for the FBX output (required). Filename is `<clothes_name>.fbx`
+- `--mhm-dir`: Directory for the MHM file (optional). Filename is `<clothes_name>.mhm`
+- `--tolerance`: Acceptable error in cm for measurements (default: 0.5)
 
 ## Clothes
 
-You can add clothes to your generated model using the `--clothes` parameter.
+You can add clothes to your generated model using the `--clothes` parameter. This is now **required** as the output filename is derived from the clothes name.
 
 ### Available Built-in Clothes
 
@@ -87,20 +100,24 @@ You can specify clothes in several ways:
 
 ### Textures
 
-When clothes are added, their textures are automatically exported:
+When clothes are added, their textures are automatically exported to a `textures/` subfolder of the output directory:
 
 ```
 output/
-├── my_character.fbx           # FBX file with material references
+├── male_casualsuit01.fbx      # FBX file with material references
 └── textures/
-    ├── clothes_diffuse.png    # Color/diffuse texture
-    └── clothes_normal.png     # Normal map
+    ├── male_casualsuit01_diffuse.png   # Color/diffuse texture
+    └── male_casualsuit01_normal.png    # Normal map
 ```
 
 The FBX file references textures in the `textures/` subfolder. When importing into Unity:
 
-- Place the `textures/` folder alongside the FBX file
+- Place the `textures/` folder alongside the FBX file (this happens automatically)
 - Unity should automatically find and apply the textures
+
+### Face Hiding
+
+The script automatically applies face hiding to prevent the body mesh from clipping through clothes. This replicates the "Hide faces under clothes" functionality from the MakeHuman GUI.
 
 ## How Exact Measurements Work
 
@@ -182,21 +199,22 @@ The FBX export is configured with the following Unity-compatible settings:
 
 **What's Exported:**
 
-| Content             | Status           |
-| ------------------- | ---------------- |
-| Human mesh          | ✓                |
-| Skeleton/Rig        | ✓                |
-| Clothes mesh        | ✓ (if specified) |
-| Material properties | ✓                |
-| Diffuse textures    | ✓                |
-| Normal maps         | ✓                |
-| Other texture maps  | ✓ (if present)   |
+| Content             | Status         |
+| ------------------- | -------------- |
+| Human mesh          | ✓              |
+| Skeleton/Rig        | ✓              |
+| Clothes mesh        | ✓              |
+| Material properties | ✓              |
+| Diffuse textures    | ✓              |
+| Normal maps         | ✓              |
+| Other texture maps  | ✓ (if present) |
+| Pose (T-pose)       | ✓              |
 
 ## Complete Example
 
 ```bash
 # Using the venv Python
-/Users/keeganliu/Dev/UWaterloo/makehuman/venv/bin/python generate_human.py \
+python3 generate_human.py \
     --height 175.0 \
     --upper-arm 32.0 \
     --lower-arm 26.0 \
@@ -204,8 +222,10 @@ The FBX export is configured with the following Unity-compatible settings:
     --lower-leg 50.0 \
     --rig-path "/path/to/Unity_Rig/unity.mhskel" \
     --clothes "male_casualsuit01" \
-    --save-mhm output/my_character.mhm \
-    --output output/my_character.fbx
+    --output-dir ./output \
+    --mhm-dir ./tmp \
+    --pose tpose \
+    --tolerance 0.3
 ```
 
 ### Example Output
@@ -251,14 +271,20 @@ Rig loaded and applied successfully!
 Loading clothes...
   Loading clothes from data/clothes/male_casualsuit01/male_casualsuit01.mhclo...
   Clothes 'Male_casualsuit01' loaded successfully!
+  Applying face hiding for clothes...
+    Hiding 1234 vertices under 'Male_casualsuit01'
+  Face hiding applied successfully!
 
-Saving MHM file to output/my_character.mhm...
-MHM file saved successfully: output/my_character.mhm
+Loading pose from data/poses/tpose.bvh...
+  Pose 'tpose' loaded and applied successfully!
 
-Exporting to output/my_character.fbx...
+Saving MHM file to ./tmp/male_casualsuit01.mhm...
+MHM file saved successfully: ./tmp/male_casualsuit01.mhm
+
+Exporting to ./output/male_casualsuit01.fbx...
   Preparing materials for headless export...
   Preparing meshes and skeleton...
-  Export complete! File saved to: output/my_character.fbx
+  Export complete! File saved to: ./output/male_casualsuit01.fbx
 
 ============================================================
 Generation complete!
@@ -269,8 +295,9 @@ Summary:
   Height: 175.0
   Rig applied: ✓
   Clothes loaded: ✓ (male_casualsuit01)
-  MHM file saved: ✓ (output/my_character.mhm)
-  FBX export: ✓ (output/my_character.fbx)
+  Pose applied: ✓ (tpose)
+  MHM file saved: ✓ (./tmp/male_casualsuit01.mhm)
+  FBX export: ✓ (./output/male_casualsuit01.fbx)
 ```
 
 ## Output Files
@@ -279,11 +306,13 @@ After running the script, you'll have:
 
 ```
 output/
-├── my_character.fbx           # Main FBX file for Unity import
-├── my_character.mhm           # MakeHuman project file (if --save-mhm used)
+├── male_casualsuit01.fbx      # Main FBX file for Unity import
 └── textures/                  # Texture files
     ├── male_casualsuit01_diffuse.png
     └── male_casualsuit01_normal.png
+
+tmp/
+└── male_casualsuit01.mhm      # MakeHuman project file (if --mhm-dir used)
 ```
 
 ## Troubleshooting
@@ -315,6 +344,13 @@ output/
 - Ensure the `textures/` folder is placed alongside the FBX file
 - Check that Unity's material import settings are configured correctly
 - Try re-importing the FBX with "Extract Materials" enabled
+- **Set Model > Normals to "Calculate"** to fix white/splotchy textures
+
+### Body clipping through clothes
+
+- The script automatically applies face hiding
+- If clipping still occurs, the clothes may not define `delete_verts` properly
+- Try using a different clothes item
 
 ## Future Improvements
 
