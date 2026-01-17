@@ -1217,13 +1217,17 @@ def main():
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    # Build output paths
-    fbx_output_path = os.path.join(args.output_dir, f"{clothes_name}.fbx")
+    # Build output paths - use <clothes_name>_avatar to avoid mesh name collision.
+    # The mesh for the avatar is called <output_file_name>Mesh.
+    # The mesh for the clothes is called <clothes_name>Mesh.
+    # Hence we need to postfix the output filename with "_avatar" to avoid mesh name collision.
+    output_basename = f"{clothes_name}_avatar"
+    fbx_output_path = os.path.join(args.output_dir, f"{output_basename}.fbx")
     mhm_output_path = None
     if args.mhm_dir:
         if not os.path.exists(args.mhm_dir):
             os.makedirs(args.mhm_dir)
-        mhm_output_path = os.path.join(args.mhm_dir, f"{clothes_name}.mhm")
+        mhm_output_path = os.path.join(args.mhm_dir, f"{output_basename}.mhm")
 
     # Save MHM file if requested (do this before FBX export for debugging)
     mhm_saved = False
