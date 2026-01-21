@@ -22,7 +22,7 @@ python3 generate_human.py \
     --upper-leg 38.5 \
     --lower-leg 48.0 \
     --rig-path "/Users/keeganliu/Documents/MakeHuman/v1py3/data/rigs/Unity_Rig/unity.mhskel" \
-    --clothes "male_casualsuit01" \
+    --clothes-dir "./my_clothes" \
     --output-dir "./output" \
     --mhm-dir "./tmp" \
     --tolerance 0.3
@@ -30,9 +30,9 @@ python3 generate_human.py \
 
 This will create:
 
-- `./output/male_casualsuit01.fbx` - The FBX model file
+- `./output/my_clothes_avatar.fbx` - The FBX model file (named after the clothes directory)
 - `./output/textures/` - Texture files for the model
-- `./tmp/male_casualsuit01.mhm` - MakeHuman project file (optional)
+- `./tmp/my_clothes_avatar.mhm` - MakeHuman project file (optional)
 
 ### Parameters
 
@@ -46,7 +46,7 @@ This will create:
 
 **Clothing (Required):**
 
-- `--clothes`: Name or path of clothes to add to the model. The output filename is derived from this.
+- `--clothes-dir`: Directory containing .mhclo clothing files to add to the model. All .mhclo files in this directory will be applied. The output filename is derived from the directory name.
 
 **Pose:**
 
@@ -77,26 +77,13 @@ You can add clothes to your generated model using the `--clothes` parameter. Thi
 
 ### Specifying Clothes
 
-You can specify clothes in several ways:
+You now specify a directory containing clothing items:
 
-1. **Just the name** (recommended):
+```bash
+--clothes-dir ./my_clothes
+```
 
-   ```bash
-   --clothes female_elegantsuit01
-   ```
-
-   Will automatically look in `data/clothes/<name>/<name>.mhclo`
-
-2. **Full relative path**:
-
-   ```bash
-   --clothes data/clothes/male_casualsuit01/male_casualsuit01.mhclo
-   ```
-
-3. **Absolute path** (for custom clothes):
-   ```bash
-   --clothes /path/to/your/custom_outfit.mhclo
-   ```
+All `.mhclo` files in the specified directory will be applied to the model, in sorted order. This allows you to batch-apply multiple clothing items (e.g., shirt, pants, hat, shoes) automatically.
 
 ### Textures
 
@@ -221,7 +208,7 @@ python3 generate_human.py \
     --upper-leg 44.0 \
     --lower-leg 50.0 \
     --rig-path "/path/to/Unity_Rig/unity.mhskel" \
-    --clothes "male_casualsuit01" \
+    --clothes-dir "/Users/keeganliu/Documents/MakeHuman/v1py3/data/clothes" \
     --output-dir ./output \
     --mhm-dir ./tmp \
     --pose tpose \
@@ -305,14 +292,15 @@ Summary:
 After running the script, you'll have:
 
 ```
+tmp/
 output/
-├── male_casualsuit01.fbx      # Main FBX file for Unity import
+├── clothed_avatar.fbx      # Main FBX file for Unity import (named after clothes directory)
 └── textures/                  # Texture files
-    ├── male_casualsuit01_diffuse.png
-    └── male_casualsuit01_normal.png
+  ├── <item>_diffuse.png
+  └── <item>_normal.png
 
 tmp/
-└── male_casualsuit01.mhm      # MakeHuman project file (if --mhm-dir used)
+└── clothed_avatar.mhm      # MakeHuman project file (if --mhm-dir used)
 ```
 
 ## Troubleshooting

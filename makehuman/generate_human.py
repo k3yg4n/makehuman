@@ -673,6 +673,13 @@ def load_clothes(human, clothes_path):
             print(f"  Warning: Failed to load clothes mesh")
             return None
 
+        # Name the mesh/object according to the clothing item filename
+        # item_name = os.path.splitext(os.path.basename(clothes_path))[0]
+        # if hasattr(mesh, "name"):
+        #     mesh.name = f"{item_name}Mesh"
+        # if hasattr(pxy, "name"):
+        #     pxy.name = item_name
+
         # IMPORTANT: Adapt the proxy mesh to the human's current shape
         # This fits the clothes to the human's modified dimensions
         # The GUI does this in adaptProxyToHuman() after loading
@@ -1110,10 +1117,10 @@ Available clothes (in data/clothes/):
         help="Acceptable error tolerance in cm for exact measurements (default: 0.5)",
     )
     parser.add_argument(
-        "--clothes",
+        "--clothes-dir",
         type=str,
         required=True,
-        help="Name or path of clothes to add (e.g., 'female_elegantsuit01' or full path to .mhclo file). Used for output filename.",
+        help="Directory containing .mhclo clothing files to add to the model. All .mhclo files in this directory will be applied.",
     )
     parser.add_argument(
         "--pose",
@@ -1176,15 +1183,36 @@ def main():
     # Load rig
     load_rig(human, args.rig_path)
 
-    # Load clothes if specified
+    # Load clothes from directory of clothing item subdirectories
     clothes_loaded = False
     loaded_clothes_proxies = []
-    if args.clothes:
-        print(f"\nLoading clothes...")
-        pxy = load_clothes(human, args.clothes)
-        clothes_loaded = pxy is not None
-        if pxy:
-            loaded_clothes_proxies.append(pxy)
+    import os
+
+    clothes_dir = args.clothes_dir
+    if not os.path.isdir(clothes_dir):
+        raise FileNotFoundError(f"Clothes directory not found: {clothes_dir}")
+    clothes_subdirs = [
+        os.path.join(clothes_dir, d)
+        for d in sorted(os.listdir(clothes_dir))
+        if os.path.isdir(os.path.join(clothes_dir, d))
+    ]
+    if not clothes_subdirs:
+        print(f"No clothing subdirectories found in: {clothes_dir}")
+    else:
+        print(f"\nLoading clothes from subdirectories in: {clothes_dir}")
+        for subdir in clothes_subdirs:
+            # Find the .mhclo file in each subdir
+            mhclo_files = [f for f in os.listdir(subdir) if f.endswith(".mhclo")]
+            if not mhclo_files:
+                print(f"  No .mhclo file found in: {subdir}")
+                continue
+            clothes_path = os.path.join(subdir, mhclo_files[0])
+            print(f"  Applying clothes: {os.path.basename(subdir)} ({mhclo_files[0]})")
+            pxy = load_clothes(human, clothes_path)
+            if pxy:
+                loaded_clothes_proxies.append(pxy)
+                clothes_loaded = True
+        if loaded_clothes_proxies:
             # Apply face hiding to prevent body clipping through clothes
             apply_face_hiding(human)
 
@@ -1207,21 +1235,13 @@ def main():
         anim = load_pose(human, pose_path_used)
         pose_loaded = anim is not None
 
-    # Determine output filenames based on clothes name
-    # Extract the clothes name (without path or extension)
-    clothes_name = os.path.basename(args.clothes)
-    if clothes_name.endswith(".mhclo"):
-        clothes_name = clothes_name[:-6]
+    # Use a fixed output basename for all clothed avatars
+    output_basename = "clothed_avatar"
 
     # Ensure output directories exist
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    # Build output paths - use <clothes_name>_avatar to avoid mesh name collision.
-    # The mesh for the avatar is called <output_file_name>Mesh.
-    # The mesh for the clothes is called <clothes_name>Mesh.
-    # Hence we need to postfix the output filename with "_avatar" to avoid mesh name collision.
-    output_basename = f"{clothes_name}_avatar"
     fbx_output_path = os.path.join(args.output_dir, f"{output_basename}.fbx")
     mhm_output_path = None
     if args.mhm_dir:
@@ -1253,11 +1273,11 @@ def main():
     print(f"  Model configured: ✓")
     print(f"  Height: {args.height}")
     print(f"  Rig applied: ✓")
-    if args.clothes:
+    if args.clothes_dir:
         if clothes_loaded:
-            print(f"  Clothes loaded: ✓ ({args.clothes})")
+            print(f"  Clothes loaded from directory: ✓ ({args.clothes_dir})")
         else:
-            print(f"  Clothes loaded: ✗ (failed)")
+            print(f"  Clothes loaded from directory: ✗ (failed)")
     if args.pose and args.pose.lower() != "none":
         if pose_loaded:
             print(f"  Pose applied: ✓ ({args.pose})")
