@@ -14,6 +14,10 @@ _should_ be able to use the same instructions as windows users, although this ha
 7. `python3 ./makehuman.py`
 8. Go to `Community` tab, click 'Synchronize'. This can take several minutes.
 9. Install `Unity Rig` in `Community` tab.
+10. Then run:
+  - compile_models.py
+  - compile_proxies.py
+  - compile_targets.py
 
 ## Current status
 
