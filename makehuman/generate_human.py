@@ -540,14 +540,14 @@ def configure_human_exact(
 
         print("\n  Current measurements:")
         for name, e in errors.items():
-            status = "✓" if e["error"] < tolerance else "✗"
+            status = "Success!" if e["error"] < tolerance else "Failure!"
             print(
                 f"    {status} {name}: {e['current']:.2f} cm (target: {e['target']:.2f}, error: {e['error']:.2f})"
             )
 
         if all_within_tolerance(errors):
             print(
-                f"\n✓ All measurements within tolerance after {outer_iter + 1} iterations!"
+                f"\nSuccess! All measurements within tolerance after {outer_iter + 1} iterations!"
             )
             break
 
@@ -575,7 +575,7 @@ def configure_human_exact(
                 # No torso modifier available, will rely on height re-adjustment
                 pass
     else:
-        print(f"\n⚠ Max iterations reached. Some measurements may not be exact.")
+        print(f"\n Max iterations reached... Some measurements may not be exact.")
 
     # Final report
     final_errors = get_all_errors()
@@ -584,7 +584,7 @@ def configure_human_exact(
     print(f"{'='*60}")
     total_error = 0
     for name, e in final_errors.items():
-        status = "✓" if e["error"] < tolerance else "✗"
+        status = "Success!" if e["error"] < tolerance else "Failure!"
         print(
             f"  {status} {name}: {e['current']:.2f} cm (target: {e['target']:.2f}, error: {e['error']:.2f})"
         )
@@ -654,12 +654,11 @@ def load_clothes(human, clothes_path):
             clothes_path = getpath.getSysDataPath(clothes_path)
 
     if not os.path.exists(clothes_path):
-        print(f"  Warning: Clothes file not found: {original_path}")
+        print(f"  Warning: Clothing item file not found: {original_path}")
         print(f"           Tried: {clothes_path}")
         return None
 
-    print(f"  Loading clothes from {clothes_path}...")
-
+    print(f"  Loading clothing item from {clothes_path}...")
     try:
         # Load the proxy (clothes)
         pxy = proxy.loadProxy(human, clothes_path, type="Clothes")
@@ -674,11 +673,13 @@ def load_clothes(human, clothes_path):
             return None
 
         # Name the mesh/object according to the clothing item filename
-        # item_name = os.path.splitext(os.path.basename(clothes_path))[0]
-        # if hasattr(mesh, "name"):
-        #     mesh.name = f"{item_name}Mesh"
-        # if hasattr(pxy, "name"):
-        #     pxy.name = item_name
+        item_name = os.path.splitext(os.path.basename(clothes_path))[0]
+        # Set the mesh name - this is what gets used during FBX export
+        mesh.name = item_name
+        # Also ensure obj.mesh has the same name (they should be the same object)
+        if hasattr(obj, "mesh"):
+            obj.mesh.name = item_name
+        print(f"  Set clothing mesh name to: {item_name}")
 
         # IMPORTANT: Adapt the proxy mesh to the human's current shape
         # This fits the clothes to the human's modified dimensions
@@ -690,11 +691,11 @@ def load_clothes(human, clothes_path):
         # Add the clothes to the human
         human.addClothesProxy(pxy)
 
-        print(f"  Clothes '{pxy.name}' loaded successfully!")
+        print(f"  Clothing item '{pxy.name}' loaded successfully!")
         return pxy
 
     except Exception as e:
-        print(f"  Warning: Failed to load clothes: {e}")
+        print(f"  Warning: Failed to load clothing item: {e}")
         import traceback
 
         traceback.print_exc()
@@ -712,7 +713,7 @@ def apply_face_hiding(human):
     if not clothes_proxies:
         return
 
-    print("  Applying face hiding for clothes...")
+    print("  Applying face hiding for clothing item...")
 
     # Create a vertex mask - start with all vertices visible
     vertsMask = np.ones(human.meshData.getVertexCount(), dtype=bool)
@@ -1162,30 +1163,7 @@ def main():
     init_logging()
     app = create_minimal_app()
 
-    # Load base mesh
-    mesh = load_base_mesh()
-
-    # Create human
-    human = create_human(mesh)
-    app.selectedHuman = human
-
-    # Configure measurements with exact values using iterative optimization
-    configure_human_exact(
-        human,
-        args.height,
-        args.upper_arm,
-        args.lower_arm,
-        args.upper_leg,
-        args.lower_leg,
-        tolerance=args.tolerance,
-    )
-
-    # Load rig
-    load_rig(human, args.rig_path)
-
-    # Load clothes from directory of clothing item subdirectories
-    clothes_loaded = False
-    loaded_clothes_proxies = []
+    # Prepare clothes list
     import os
 
     clothes_dir = args.clothes_dir
@@ -1198,102 +1176,149 @@ def main():
     ]
     if not clothes_subdirs:
         print(f"No clothing subdirectories found in: {clothes_dir}")
-    else:
-        print(f"\nLoading clothes from subdirectories in: {clothes_dir}")
-        for subdir in clothes_subdirs:
-            # Find the .mhclo file in each subdir
-            mhclo_files = [f for f in os.listdir(subdir) if f.endswith(".mhclo")]
-            if not mhclo_files:
-                print(f"  No .mhclo file found in: {subdir}")
-                continue
-            clothes_path = os.path.join(subdir, mhclo_files[0])
-            print(f"  Applying clothes: {os.path.basename(subdir)} ({mhclo_files[0]})")
-            pxy = load_clothes(human, clothes_path)
-            if pxy:
-                loaded_clothes_proxies.append(pxy)
-                clothes_loaded = True
+        return
+
+    print(f"\nGenerating one avatar per clothing item in: {clothes_dir}")
+    # Cache for modifier values after first configuration
+    cached_modifiers = None
+    for idx, subdir in enumerate(clothes_subdirs):
+        # Find the .mhclo file in each subdir
+        mhclo_files = [f for f in os.listdir(subdir) if f.endswith(".mhclo")]
+        if not mhclo_files:
+            print(f"  No .mhclo file found in: {subdir}")
+            continue
+        clothes_path = os.path.join(subdir, mhclo_files[0])
+        clothing_name = os.path.splitext(mhclo_files[0])[0]
+        print(f"\n=== Generating avatar for clothing: {clothing_name} ===")
+
+        # Re-initialize for each avatar
+        mesh = load_base_mesh()
+        human = create_human(mesh)
+        app.selectedHuman = human
+
+        # Set the base human mesh name to avoid conflicts with clothing
+        human.mesh.name = "base_avatar"
+
+        if cached_modifiers is None:
+            # First time: run the full iterative process and cache modifier values
+            configure_human_exact(
+                human,
+                args.height,
+                args.upper_arm,
+                args.lower_arm,
+                args.upper_leg,
+                args.lower_leg,
+                tolerance=args.tolerance,
+            )
+            # Cache all modifier values
+            cached_modifiers = {
+                name: human.getModifier(name).getValue() for name in human.modifierNames
+            }
+        else:
+            # Reuse cached modifier values
+            for name, value in cached_modifiers.items():
+                try:
+                    human.getModifier(name).setValue(value)
+                except Exception:
+                    pass
+            human.applyAllTargets()
+
+        # Load rig
+        load_rig(human, args.rig_path)
+
+        # Load only this clothing item
+        pxy = load_clothes(human, clothes_path)
+        loaded_clothes_proxies = [pxy] if pxy else []
         if loaded_clothes_proxies:
-            # Apply face hiding to prevent body clipping through clothes
             apply_face_hiding(human)
 
-    # Load pose (default is T-pose)
-    pose_loaded = False
-    pose_path_used = None
-    if args.pose and args.pose.lower() != "none":
-        if args.pose.lower() == "tpose":
-            # Use the built-in T-pose file
-            pose_path_used = getpath.getSysDataPath("poses/tpose.bvh")
+        # Debug: Print all objects that will be exported
+        print(f"\n  Debug: Checking objects for export...")
+        all_objects = human.getObjects(excludeZeroFaceObjs=False)
+        print(f"  Total objects: {len(all_objects)}")
+        for idx, obj in enumerate(all_objects):
+            obj_name = getattr(obj, "name", "unnamed")
+            mesh_name = (
+                getattr(obj.mesh, "name", "unnamed")
+                if hasattr(obj, "mesh")
+                else "no mesh"
+            )
+            face_count = (
+                obj.mesh.getFaceCount(excludeMaskedFaces=True)
+                if hasattr(obj, "mesh")
+                else 0
+            )
+            print(
+                f"    Object {idx}: obj.name={obj_name}, mesh.name={mesh_name}, faces={face_count}"
+            )
+
+        # Load pose (default is T-pose)
+        pose_loaded = False
+        pose_path_used = None
+        if args.pose and args.pose.lower() != "none":
+            if args.pose.lower() == "tpose":
+                pose_path_used = getpath.getSysDataPath("poses/tpose.bvh")
+            else:
+                pose_path_used = args.pose
+                if not os.path.exists(pose_path_used):
+                    alt_path = getpath.getSysDataPath(f"poses/{pose_path_used}")
+                    if os.path.exists(alt_path):
+                        pose_path_used = alt_path
+            anim = load_pose(human, pose_path_used)
+            pose_loaded = anim is not None
+
+        # Output file names based on clothing item
+        if not os.path.exists(args.output_dir):
+            os.makedirs(args.output_dir)
+        fbx_output_path = os.path.join(args.output_dir, f"{clothing_name}.fbx")
+        mhm_output_path = None
+        if args.mhm_dir:
+            if not os.path.exists(args.mhm_dir):
+                os.makedirs(args.mhm_dir)
+            mhm_output_path = os.path.join(args.mhm_dir, f"{clothing_name}.mhm")
+
+        # Save MHM file if requested
+        mhm_saved = False
+        if mhm_output_path:
+            save_mhm(
+                human,
+                mhm_output_path,
+                skeleton_path=args.rig_path,
+                clothes_proxies=(
+                    loaded_clothes_proxies if loaded_clothes_proxies else None
+                ),
+                pose_path=pose_path_used if pose_loaded else None,
+            )
+            mhm_saved = True
+
+        # Export to FBX
+        fbx_success = export_fbx(human, fbx_output_path)
+
+        print("\n" + "=" * 60)
+        print(f"Generation complete for {clothing_name}!")
+        print("=" * 60)
+
+        # Print summary
+        print(f"\n{clothing_name} Generation Summary:")
+        print(f"  Model configured: Success!")
+        print(f"  Height: {args.height}")
+        print(f"  Rig applied: Success!")
+        if mhm_saved:
+            print(f"  MHM file saved: Success! ({mhm_output_path})")
+        if fbx_success:
+            print(f"  FBX export: Success! ({fbx_output_path})")
         else:
-            # User-specified pose file
-            pose_path_used = args.pose
-            if not os.path.exists(pose_path_used):
-                # Try to find it in the poses directory
-                alt_path = getpath.getSysDataPath(f"poses/{pose_path_used}")
-                if os.path.exists(alt_path):
-                    pose_path_used = alt_path
-
-        anim = load_pose(human, pose_path_used)
-        pose_loaded = anim is not None
-
-    # Use a fixed output basename for all clothed avatars
-    output_basename = "clothed_avatar"
-
-    # Ensure output directories exist
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-
-    fbx_output_path = os.path.join(args.output_dir, f"{output_basename}.fbx")
-    mhm_output_path = None
-    if args.mhm_dir:
-        if not os.path.exists(args.mhm_dir):
-            os.makedirs(args.mhm_dir)
-        mhm_output_path = os.path.join(args.mhm_dir, f"{output_basename}.mhm")
-
-    # Save MHM file if requested (do this before FBX export for debugging)
-    mhm_saved = False
-    if mhm_output_path:
-        save_mhm(
-            human,
-            mhm_output_path,
-            skeleton_path=args.rig_path,
-            clothes_proxies=loaded_clothes_proxies if loaded_clothes_proxies else None,
-            pose_path=pose_path_used if pose_loaded else None,
-        )
-        mhm_saved = True
-
-    # Export to FBX
-    fbx_success = export_fbx(human, fbx_output_path)
-
-    print("\n" + "=" * 60)
-    print("Generation complete!")
-    print("=" * 60)
-
-    # Print summary
-    print("\nSummary:")
-    print(f"  Model configured: ✓")
-    print(f"  Height: {args.height}")
-    print(f"  Rig applied: ✓")
-    if args.clothes_dir:
-        if clothes_loaded:
-            print(f"  Clothes loaded from directory: ✓ ({args.clothes_dir})")
+            print(f"  FBX export: Failed!")
+            if not mhm_saved:
+                print("\n  Recommendation: Run again with --mhm-dir to save the model,")
+                print("  then use MakeHuman GUI to load the .mhm and export to FBX.")
+        if args.pose and args.pose.lower() != "none":
+            if pose_loaded:
+                print(f"  Pose applied: Success! ({args.pose})")
+            else:
+                print(f"  Pose applied: Failed!")
         else:
-            print(f"  Clothes loaded from directory: ✗ (failed)")
-    if args.pose and args.pose.lower() != "none":
-        if pose_loaded:
-            print(f"  Pose applied: ✓ ({args.pose})")
-        else:
-            print(f"  Pose applied: ✗ (failed)")
-    else:
-        print(f"  Pose: rest pose (no pose applied)")
-    if mhm_saved:
-        print(f"  MHM file saved: ✓ ({mhm_output_path})")
-    if fbx_success:
-        print(f"  FBX export: ✓ ({fbx_output_path})")
-    else:
-        print(f"  FBX export: ✗ (failed - use .mhm file for manual export)")
-        if not mhm_saved:
-            print("\n  Recommendation: Run again with --mhm-dir to save the model,")
-            print("  then use MakeHuman GUI to load the .mhm and export to FBX.")
+            print(f"  Pose: Rest pose (no animation applied)")
 
 
 if __name__ == "__main__":
