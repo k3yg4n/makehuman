@@ -128,6 +128,7 @@ class Ruler:
         self.Measures["measure/measure-lowerarm-length-decr|incr"] = [10040, 10548]
         self.Measures["measure/measure-upperleg-height-decr|incr"] = [10970, 11230]
         self.Measures["measure/measure-lowerleg-height-decr|incr"] = [11225, 12820]
+        self.Measures["measure/measure-waist-circ-decr|incr"] = [4121,10760,10757,10777,10776,10779,10780,10778,10781,10771,10773,10772,10775,10774,10814,10834,10816,10817,10818,10819,10820,10821,4181,4180,4179,4178,4177,4176,4175,4196,4173,4131,4132,4129,4130,4128,4138,4135,4137,4136,4133,4134,4108,4113,4118,4121]
 
     def getMeasure(self, human, measurementname, mode):
         """Calculate the measurement in cm (metric mode)."""
@@ -346,6 +347,7 @@ def configure_human_exact(
     lower_arm_cm,
     upper_leg_cm,
     lower_leg_cm,
+    waist_circum_cm=None,
     tolerance=0.5,
     max_outer_iterations=10,
 ):
@@ -364,6 +366,7 @@ def configure_human_exact(
         lower_arm_cm: Lower arm length in cm
         upper_leg_cm: Upper leg length in cm
         lower_leg_cm: Lower leg length in cm
+        waist_circum_cm: Waist circumference in cm (optional)
         tolerance: Acceptable error in cm for each measurement
         max_outer_iterations: Maximum optimization iterations
 
@@ -372,6 +375,31 @@ def configure_human_exact(
     """
     ruler = Ruler()
 
+    def get_measurement_range(modifier_name, measurement_name):
+        """Get the min and max achievable measurement values in cm."""
+        try:
+            modifier = human.getModifier(modifier_name)
+        except KeyError:
+            return None, None
+        
+        # Get min value
+        min_val = modifier.getMin()
+        modifier.setValue(min_val)
+        human.applyAllTargets()
+        min_cm = ruler.getMeasure(human, measurement_name, "metric")
+        
+        # Get max value
+        max_val = modifier.getMax()
+        modifier.setValue(max_val)
+        human.applyAllTargets()
+        max_cm = ruler.getMeasure(human, measurement_name, "metric")
+        
+        # Reset to default
+        modifier.setValue(0.0)
+        human.applyAllTargets()
+        
+        return min_cm, max_cm
+
     print(f"\n{'='*60}")
     print("Configuring human with EXACT measurements:")
     print(f"  Target height: {height_cm} cm")
@@ -379,6 +407,8 @@ def configure_human_exact(
     print(f"  Target lower arm: {lower_arm_cm} cm")
     print(f"  Target upper leg: {upper_leg_cm} cm")
     print(f"  Target lower leg: {lower_leg_cm} cm")
+    if waist_circum_cm is not None:
+        print(f"  Target waist circumference: {waist_circum_cm} cm")
     print(f"{'='*60}")
 
     # Define all measurements we want to control
@@ -417,6 +447,29 @@ def configure_human_exact(
             "modifier": "measure/measure-lowerleg-height-decr|incr",
         },
     }
+    
+    # Add waist circumference if specified
+    if waist_circum_cm is not None:
+        # Check achievable range and clamp if necessary
+        min_waist, max_waist = get_measurement_range(
+            "measure/measure-waist-circ-decr|incr",
+            "measure/measure-waist-circ-decr|incr"
+        )
+        if min_waist is not None and max_waist is not None:
+            if waist_circum_cm < min_waist:
+                print(f"  Warning: Waist circumference {waist_circum_cm} cm is below minimum achievable ({min_waist:.2f} cm). Clamping to minimum.")
+                waist_circum_cm = min_waist
+            elif waist_circum_cm > max_waist:
+                print(f"  Warning: Waist circumference {waist_circum_cm} cm exceeds maximum achievable ({max_waist:.2f} cm). Clamping to maximum.")
+                waist_circum_cm = max_waist
+        
+        measurements["waist"] = {
+            "target": waist_circum_cm,
+            "get_current": lambda h: ruler.getMeasure(
+                h, "measure/measure-waist-circ-decr|incr", "metric"
+            ),
+            "modifier": "measure/measure-waist-circ-decr|incr",
+        }
 
     def get_all_errors():
         """Calculate current errors for all measurements."""
@@ -534,6 +587,14 @@ def configure_human_exact(
             "measure/measure-lowerleg-height-decr|incr",
             lower_leg_cm,
         )
+        
+        # Adjust waist circumference if specified
+        if waist_circum_cm is not None:
+            adjust_limb_quietly(
+                "measure/measure-waist-circ-decr|incr",
+                "measure/measure-waist-circ-decr|incr",
+                waist_circum_cm,
+            )
 
         # Step 3: Check all errors
         errors = get_all_errors()
@@ -1057,6 +1118,7 @@ Example:
         --lower-arm 25.0 \\
         --upper-leg 45.0 \\
         --lower-leg 40.0 \\
+        --waist-circum 75.0 \\
         --rig-path /path/to/unity.mhskel \\
         --clothes male_casualsuit01 \\
         --output-dir ./output \\
@@ -1091,6 +1153,12 @@ Available clothes (in data/clothes/):
     )
     parser.add_argument(
         "--lower-leg", type=float, required=True, help="Lower leg length in centimeters"
+    )
+    parser.add_argument(
+        "--waist-circum",
+        type=float,
+        required=False,
+        help="Waist circumference in centimeters",
     )
     parser.add_argument(
         "--rig-path",
@@ -1177,6 +1245,7 @@ def main():
         args.lower_arm,
         args.upper_leg,
         args.lower_leg,
+        waist_circum_cm=args.waist_circum,
         tolerance=args.tolerance,
     )
 
