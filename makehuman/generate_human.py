@@ -1214,8 +1214,7 @@ def main():
                 clothes_loaded = True
         if loaded_clothes_proxies:
             # Apply face hiding to prevent body clipping through clothes
-            # apply_face_hiding(human)
-            pass
+            apply_face_hiding(human)
 
     # Load pose (default is T-pose)
     pose_loaded = False
