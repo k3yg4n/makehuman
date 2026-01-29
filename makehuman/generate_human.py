@@ -930,8 +930,8 @@ def export_fbx(human, output_path, verbose=True):
                 self.localG = False
                 self.hiddenGeom = False
                 self.feetOnGround = True
-                self.scale = 0.1  # Convert to meters (MakeHuman uses decimeters)
-                self.unit = "meter"
+                self.scale = 1.0  # Keep original scale in decimeters
+                self.unit = "decimeter"
                 self.human = None
                 self._copiedFiles = {}
 
