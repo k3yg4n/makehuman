@@ -701,15 +701,20 @@ def load_clothes(human, clothes_path):
         return None
 
 
-def apply_face_hiding(human):
+def apply_face_hiding(human, return_mask=False):
     """
     Apply face masking to hide body vertices under clothes.
     This prevents the body from clipping through clothing.
 
     This replicates the "Hide faces under clothes" functionality from the GUI.
+    
+    Args:
+        return_mask: If True, return the mask instead of applying it
     """
     clothes_proxies = human.clothesProxies
     if not clothes_proxies:
+        if return_mask:
+            return np.ones(human.meshData.getVertexCount(), dtype=bool)
         return
 
     print("  Applying face hiding for clothes...")
@@ -730,9 +735,75 @@ def apply_face_hiding(human):
             vertsMask[verts_to_hide] = False
             print(f"    Hiding {len(verts_to_hide)} vertices under '{pxy.name}'")
 
+    if return_mask:
+        return vertsMask
+    
     # Apply the mask to the human mesh
     human.changeVertexMask(vertsMask)
     print("  Face hiding applied successfully!")
+
+
+def apply_custom_body_hiding(human, existing_mask=None):
+    """
+    Apply custom face masking to hide specific body parts.
+    
+    Hides:
+    - Entire torso/chest (all body/trunk regions)
+    - Underwear region (genital area, hips, upper thighs)
+    - Arms from shoulders to elbows (upper arms)
+    
+    Args:
+        existing_mask: Optional existing vertex mask to combine with (from clothes hiding)
+    """
+    print("\n  Applying custom body part hiding...")
+    
+    # Get vertex coordinates
+    mesh = human.meshData
+    vertices = mesh.coord  # Shape: (num_vertices, 3) where columns are [x, y, z]
+    
+    # Start with existing mask if provided, otherwise all visible
+    if existing_mask is not None:
+        visible_mask = existing_mask.copy()
+    else:
+        visible_mask = np.ones(len(vertices), dtype=bool)
+    
+    x = vertices[:, 0]
+    y = vertices[:, 1]
+    z = vertices[:, 2]
+    
+    # Print coordinate statistics
+    print(f"    X-coordinate range: {x.min():.3f} to {x.max():.3f}")
+    print(f"    Y-coordinate range: {y.min():.3f} to {y.max():.3f}")
+    print(f"    X percentiles: 25%={np.percentile(x, 25):.3f}, 50%={np.percentile(x, 50):.3f}, 75%={np.percentile(x, 75):.3f}")
+    
+    # Hide from mid-thigh (Y=3.8) up through stomach and chest (Y=7.5)
+    # AND exclude hands by limiting X range (hands extend far left/right)
+    # X close to 0 = center of body (torso/stomach)
+    # X far from 0 = extremities (hands, feet at sides)
+    # Restrict to X between -3.25 and 3.25 to exclude hands while keeping torso/arms
+    hide_mask = (y >= -2) & (y <= 6.25) & (x >= -3.25) & (x <= 3.25)
+    
+    print(f"    Hiding vertices with: Y in [-2, 6.25] AND X in [-3.25, 3.25]")
+    
+    # Apply this mask ON TOP of existing mask (combine them)
+    visible_mask[hide_mask] = False
+    
+    # Count hidden vertices
+    hidden_count = np.count_nonzero(hide_mask)
+    total_count = len(vertices)
+    total_hidden = np.count_nonzero(~visible_mask)
+    
+    print(f"    Masking {hidden_count} vertices ({hidden_count/total_count*100:.1f}%)")
+    
+    # Apply the combined mask
+    human.changeVertexMask(visible_mask)
+    
+    # Check face masking result
+    face_mask = mesh.getFaceMask()
+    hidden_faces = np.count_nonzero(~face_mask)
+    total_faces = len(face_mask)
+    print(f"    Result: {hidden_faces}/{total_faces} faces hidden ({hidden_faces/total_faces*100:.1f}%)")
+    print("  Custom body hiding applied successfully!")
 
 
 def load_pose(human, pose_path):
@@ -1128,7 +1199,6 @@ Available clothes (in data/clothes/):
         default="tpose",
         help="Pose to apply: 'tpose' for T-pose (default), 'none' for rest pose, or path to .bvh/.mhp file",
     )
-
     args = parser.parse_args()
 
     # Validate height
@@ -1183,10 +1253,64 @@ def main():
     # Load rig
     load_rig(human, args.rig_path)
 
+    # Ensure output directories exist
+    import os
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    
+    mhm_dir_exists = False
+    if args.mhm_dir:
+        if not os.path.exists(args.mhm_dir):
+            os.makedirs(args.mhm_dir)
+        mhm_dir_exists = True
+
+    # Load pose (default is T-pose) - needed for both models
+    pose_loaded = False
+    pose_path_used = None
+    if args.pose and args.pose.lower() != "none":
+        if args.pose.lower() == "tpose":
+            # Use the built-in T-pose file
+            pose_path_used = getpath.getSysDataPath("poses/tpose.bvh")
+        else:
+            # User-specified pose file
+            pose_path_used = args.pose
+            if not os.path.exists(pose_path_used):
+                # Try to find it in the poses directory
+                alt_path = getpath.getSysDataPath(f"poses/{pose_path_used}")
+                if os.path.exists(alt_path):
+                    pose_path_used = alt_path
+
+        anim = load_pose(human, pose_path_used)
+        pose_loaded = anim is not None
+
+    # ========================================================================
+    # MODEL 1: Base Avatar for Segmentation (no clothes, with body hiding)
+    # ========================================================================
+    print("\n" + "=" * 60)
+    print("Generating Model 1: Base Avatar for Segmentation")
+    print("=" * 60)
+    
+    # Apply custom body hiding for segmentation model (BEFORE adding clothes)
+    apply_custom_body_hiding(human)
+
+    # Export segmentation avatar (FBX only, no MHM)
+    segmentation_basename = "base_avatar_for_segmentation"
+    segmentation_fbx_path = os.path.join(args.output_dir, f"{segmentation_basename}.fbx")
+    segmentation_fbx_success = export_fbx(human, segmentation_fbx_path)
+
+    # ========================================================================
+    # MODEL 2: Clothed Avatar (with clothes, no face hiding)
+    # ========================================================================
+    print("\n" + "=" * 60)
+    print("Generating Model 2: Clothed Avatar")
+    print("=" * 60)
+
+    # Reset vertex mask to show all vertices before adding clothes
+    human.changeVertexMask(np.ones(human.meshData.getVertexCount(), dtype=bool))
+
     # Load clothes from directory of clothing item subdirectories
     clothes_loaded = False
     loaded_clothes_proxies = []
-    import os
 
     clothes_dir = args.clothes_dir
     if not os.path.isdir(clothes_dir):
@@ -1212,58 +1336,26 @@ def main():
             if pxy:
                 loaded_clothes_proxies.append(pxy)
                 clothes_loaded = True
-        if loaded_clothes_proxies:
-            # Apply face hiding to prevent body clipping through clothes
-            # apply_face_hiding(human)
-            pass
 
-    # Load pose (default is T-pose)
-    pose_loaded = False
-    pose_path_used = None
-    if args.pose and args.pose.lower() != "none":
-        if args.pose.lower() == "tpose":
-            # Use the built-in T-pose file
-            pose_path_used = getpath.getSysDataPath("poses/tpose.bvh")
-        else:
-            # User-specified pose file
-            pose_path_used = args.pose
-            if not os.path.exists(pose_path_used):
-                # Try to find it in the poses directory
-                alt_path = getpath.getSysDataPath(f"poses/{pose_path_used}")
-                if os.path.exists(alt_path):
-                    pose_path_used = alt_path
-
-        anim = load_pose(human, pose_path_used)
-        pose_loaded = anim is not None
-
-    # Use a fixed output basename for all clothed avatars
-    output_basename = "clothed_avatar"
-
-    # Ensure output directories exist
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-
-    fbx_output_path = os.path.join(args.output_dir, f"{output_basename}.fbx")
-    mhm_output_path = None
-    if args.mhm_dir:
-        if not os.path.exists(args.mhm_dir):
-            os.makedirs(args.mhm_dir)
-        mhm_output_path = os.path.join(args.mhm_dir, f"{output_basename}.mhm")
-
-    # Save MHM file if requested (do this before FBX export for debugging)
-    mhm_saved = False
-    if mhm_output_path:
+    # Export clothed avatar (no face hiding - keep full body visible)
+    clothed_basename = "clothed_avatar"
+    clothed_fbx_path = os.path.join(args.output_dir, f"{clothed_basename}.fbx")
+    
+    # Save MHM file for clothed avatar only
+    clothed_mhm_saved = False
+    if mhm_dir_exists:
+        clothed_mhm_path = os.path.join(args.mhm_dir, f"{clothed_basename}.mhm")
         save_mhm(
             human,
-            mhm_output_path,
+            clothed_mhm_path,
             skeleton_path=args.rig_path,
             clothes_proxies=loaded_clothes_proxies if loaded_clothes_proxies else None,
             pose_path=pose_path_used if pose_loaded else None,
         )
-        mhm_saved = True
+        clothed_mhm_saved = True
 
-    # Export to FBX
-    fbx_success = export_fbx(human, fbx_output_path)
+    # Export clothed avatar to FBX
+    clothed_fbx_success = export_fbx(human, clothed_fbx_path)
 
     print("\n" + "=" * 60)
     print("Generation complete!")
@@ -1274,11 +1366,6 @@ def main():
     print(f"  Model configured: ✓")
     print(f"  Height: {args.height}")
     print(f"  Rig applied: ✓")
-    if args.clothes_dir:
-        if clothes_loaded:
-            print(f"  Clothes loaded from directory: ✓ ({args.clothes_dir})")
-        else:
-            print(f"  Clothes loaded from directory: ✗ (failed)")
     if args.pose and args.pose.lower() != "none":
         if pose_loaded:
             print(f"  Pose applied: ✓ ({args.pose})")
@@ -1286,15 +1373,25 @@ def main():
             print(f"  Pose applied: ✗ (failed)")
     else:
         print(f"  Pose: rest pose (no pose applied)")
-    if mhm_saved:
-        print(f"  MHM file saved: ✓ ({mhm_output_path})")
-    if fbx_success:
-        print(f"  FBX export: ✓ ({fbx_output_path})")
+    
+    print("\n  Model 1 - Base Avatar for Segmentation:")
+    print(f"    Body hiding applied: ✓ (torso, underwear region, upper arms)")
+    if segmentation_fbx_success:
+        print(f"    FBX export: ✓ ({segmentation_fbx_path})")
     else:
-        print(f"  FBX export: ✗ (failed - use .mhm file for manual export)")
-        if not mhm_saved:
-            print("\n  Recommendation: Run again with --mhm-dir to save the model,")
-            print("  then use MakeHuman GUI to load the .mhm and export to FBX.")
+        print(f"    FBX export: ✗ (failed)")
+
+    print("\n  Model 2 - Clothed Avatar:")
+    if clothes_loaded:
+        print(f"    Clothes loaded: ✓ ({args.clothes_dir})")
+    else:
+        print(f"    Clothes loaded: ✗ (failed)")
+    if clothed_fbx_success:
+        print(f"    FBX export: ✓ ({clothed_fbx_path})")
+    else:
+        print(f"    FBX export: ✗ (failed)")
+    if clothed_mhm_saved:
+        print(f"    MHM saved: ✓ ({clothed_mhm_path})")
 
 
 if __name__ == "__main__":
