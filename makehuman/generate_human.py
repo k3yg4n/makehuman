@@ -946,7 +946,7 @@ def save_mhm(human, mhm_path, skeleton_path=None, clothes_proxies=None, pose_pat
         traceback.print_exc()
 
 
-def export_fbx(human, output_path, verbose=True):
+def export_fbx(human, output_path, verbose=True, clothing_names=None):
     """
     Export the human as FBX with Unity-compatible settings.
 
@@ -954,6 +954,7 @@ def export_fbx(human, output_path, verbose=True):
         human: The Human object
         output_path: Path to save the FBX file
         verbose: Print detailed progress information
+        clothing_names: List of clothing item names for organizing textures
 
     Returns:
         True if export succeeded, False otherwise
@@ -988,7 +989,7 @@ def export_fbx(human, output_path, verbose=True):
 
         # Create export configuration
         class FbxConfig:
-            def __init__(self):
+            def __init__(self, clothing_names=None):
                 self.useRelPaths = False
                 self.useMaterials = True  # Enable materials/textures export
                 self.binary = True
@@ -1005,6 +1006,7 @@ def export_fbx(human, output_path, verbose=True):
                 self.unit = "decimeter"
                 self.human = None
                 self._copiedFiles = {}
+                self.clothing_names = clothing_names or []
 
             def setHuman(self, human):
                 self.human = human
@@ -1042,9 +1044,17 @@ def export_fbx(human, output_path, verbose=True):
             def setupTexFolder(self, filepath):
                 self.outFolder = os.path.realpath(os.path.dirname(filepath))
                 self.filename = os.path.basename(filepath)
+                # Create main textures folder for body/default textures
                 self.texFolder = os.path.join(self.outFolder, "textures")
                 if not os.path.exists(self.texFolder):
                     os.makedirs(self.texFolder)
+                # Create clothing-specific texture folders
+                self.clothingTexFolders = {}
+                for clothing_name in self.clothing_names:
+                    tex_folder = os.path.join(self.outFolder, f"{clothing_name}_textures")
+                    if not os.path.exists(tex_folder):
+                        os.makedirs(tex_folder)
+                    self.clothingTexFolders[clothing_name] = tex_folder
 
             def goodName(self, name):
                 return name.replace(" ", "_").replace("-", "_").lower()
@@ -1059,14 +1069,28 @@ def export_fbx(human, output_path, verbose=True):
                 if filepath in self._copiedFiles:
                     return self._copiedFiles[filepath]
 
+                # Determine which texture folder to use based on the source path
+                dest_folder = self.texFolder  # Default to main textures folder
+                
+                # Check if this texture belongs to a clothing item
+                for clothing_name in self.clothing_names:
+                    # Check if the texture path contains the clothing name
+                    if clothing_name in filepath:
+                        dest_folder = self.clothingTexFolders[clothing_name]
+                        break
+
                 # Get the destination path
                 basename = os.path.basename(filepath)
-                dest_path = os.path.join(self.texFolder, basename)
+                dest_path = os.path.join(dest_folder, basename)
 
                 # Copy the file if it exists and isn't already there
                 if os.path.isfile(filepath) and not os.path.exists(dest_path):
                     try:
                         shutil.copy2(filepath, dest_path)
+                        if dest_folder != self.texFolder:
+                            # Print info about clothing texture
+                            clothing_name = [name for name in self.clothing_names if name in filepath][0]
+                            print(f"    Copied texture for '{clothing_name}': {basename}")
                     except Exception as e:
                         print(f"  Warning: Could not copy texture {filepath}: {e}")
                         return filepath
@@ -1074,7 +1098,7 @@ def export_fbx(human, output_path, verbose=True):
                 self._copiedFiles[filepath] = dest_path
                 return dest_path
 
-        config = FbxConfig()
+        config = FbxConfig(clothing_names=clothing_names)
         config.setHuman(human)
 
         # Disable autoBlendSkin on all materials to avoid Qt image processing
@@ -1293,6 +1317,7 @@ def main():
     # Load clothes from directory of clothing item subdirectories
     clothes_loaded = False
     loaded_clothes_proxies = []
+    clothing_names = []  # Track clothing item names for texture organization
 
     clothes_dir = args.clothes_dir
     if not os.path.isdir(clothes_dir):
@@ -1313,10 +1338,12 @@ def main():
                 print(f"  No .mhclo file found in: {subdir}")
                 continue
             clothes_path = os.path.join(subdir, mhclo_files[0])
-            print(f"  Applying clothes: {os.path.basename(subdir)} ({mhclo_files[0]})")
+            clothing_name = os.path.basename(subdir)
+            print(f"  Applying clothes: {clothing_name} ({mhclo_files[0]})")
             pxy = load_clothes(human, clothes_path)
             if pxy:
                 loaded_clothes_proxies.append(pxy)
+                clothing_names.append(clothing_name)
                 clothes_loaded = True
 
     # Apply custom body hiding to the human body mesh (hides torso, underwear region, upper arms)
@@ -1340,7 +1367,7 @@ def main():
         clothed_mhm_saved = True
 
     # Export clothed avatar to FBX
-    clothed_fbx_success = export_fbx(human, clothed_fbx_path)
+    clothed_fbx_success = export_fbx(human, clothed_fbx_path, clothing_names=clothing_names)
 
     print("\n" + "=" * 60)
     print("Generation complete!")
