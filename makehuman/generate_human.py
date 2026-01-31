@@ -1284,29 +1284,11 @@ def main():
         pose_loaded = anim is not None
 
     # ========================================================================
-    # MODEL 1: Base Avatar for Segmentation (no clothes, with body hiding)
+    # Generate Clothed Avatar (with clothes and body hiding)
     # ========================================================================
     print("\n" + "=" * 60)
-    print("Generating Model 1: Base Avatar for Segmentation")
+    print("Generating Clothed Avatar")
     print("=" * 60)
-    
-    # Apply custom body hiding for segmentation model (BEFORE adding clothes)
-    apply_custom_body_hiding(human)
-
-    # Export segmentation avatar (FBX only, no MHM)
-    segmentation_basename = "base_avatar_for_segmentation"
-    segmentation_fbx_path = os.path.join(args.output_dir, f"{segmentation_basename}.fbx")
-    segmentation_fbx_success = export_fbx(human, segmentation_fbx_path)
-
-    # ========================================================================
-    # MODEL 2: Clothed Avatar (with clothes, no face hiding)
-    # ========================================================================
-    print("\n" + "=" * 60)
-    print("Generating Model 2: Clothed Avatar")
-    print("=" * 60)
-
-    # Reset vertex mask to show all vertices before adding clothes
-    human.changeVertexMask(np.ones(human.meshData.getVertexCount(), dtype=bool))
 
     # Load clothes from directory of clothing item subdirectories
     clothes_loaded = False
@@ -1337,11 +1319,14 @@ def main():
                 loaded_clothes_proxies.append(pxy)
                 clothes_loaded = True
 
-    # Export clothed avatar (no face hiding - keep full body visible)
+    # Apply custom body hiding to the human body mesh (hides torso, underwear region, upper arms)
+    apply_custom_body_hiding(human)
+
+    # Export clothed avatar
     clothed_basename = "clothed_avatar"
     clothed_fbx_path = os.path.join(args.output_dir, f"{clothed_basename}.fbx")
     
-    # Save MHM file for clothed avatar only
+    # Save MHM file for clothed avatar
     clothed_mhm_saved = False
     if mhm_dir_exists:
         clothed_mhm_path = os.path.join(args.mhm_dir, f"{clothed_basename}.mhm")
@@ -1374,18 +1359,12 @@ def main():
     else:
         print(f"  Pose: rest pose (no pose applied)")
     
-    print("\n  Model 1 - Base Avatar for Segmentation:")
-    print(f"    Body hiding applied: ✓ (torso, underwear region, upper arms)")
-    if segmentation_fbx_success:
-        print(f"    FBX export: ✓ ({segmentation_fbx_path})")
-    else:
-        print(f"    FBX export: ✗ (failed)")
-
-    print("\n  Model 2 - Clothed Avatar:")
+    print("\n  Clothed Avatar:")
     if clothes_loaded:
         print(f"    Clothes loaded: ✓ ({args.clothes_dir})")
     else:
         print(f"    Clothes loaded: ✗ (failed)")
+    print(f"    Body hiding applied: ✓ (torso, underwear region, upper arms)")
     if clothed_fbx_success:
         print(f"    FBX export: ✓ ({clothed_fbx_path})")
     else:
